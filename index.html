@@ -446,7 +446,9 @@
       try {
         const res = await fetch(API_CONFIG_URL);
         if (!res.ok) throw new Error("API config non disponible");
-        const config = await res.json();
+
+        const payload = await res.json();
+        const config = Array.isArray(payload) ? payload[0] : payload;
 
         data = {
           ...defaultData,
