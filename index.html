@@ -176,7 +176,12 @@
 
   <script>
     const STORAGE_KEY = "corvees-famille-v1";
+
+    // URL de config (workflow 1)
     const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
+
+    // URL de journalisation (workflow 2)
+    const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/TON_UUID_COMPLETE"; // à remplacer
 
     const defaultData = {
       children: [
@@ -303,14 +308,32 @@
         const btn = document.createElement("button");
         btn.textContent = completed ? "Annuler" : "Valider";
 
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
           const state = getChildDayState(data.activeChildId);
           const index = state.completedChores.indexOf(chore.id);
+          const isNowCompleted = index === -1;
 
-          if (index === -1) {
+          if (isNowCompleted) {
+            // La corvée passe de non faite à faite
             state.completedChores.push(chore.id);
             state.stars += chore.stars;
+
+            // Journalisation vers N8N / Notion
+            try {
+              await fetch(API_COMPLETE_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  personId: data.activeChildId,
+                  choreId: chore.id,
+                  date: new Date().toISOString().slice(0, 10)
+                })
+              });
+            } catch (e) {
+              console.warn("Impossible de journaliser la corvée dans Notion :", e);
+            }
           } else {
+            // Annulation de la corvée (pas de journalisation pour l'instant)
             state.completedChores.splice(index, 1);
             state.stars -= chore.stars;
             if (state.stars < 0) state.stars = 0;
@@ -385,10 +408,23 @@
 
       data.children.forEach(child => {
         const state = getChildDayState(child.id);
-        const li = document.createElement("li");
 
+        const choresForChild = data.chores.filter(chore => {
+          if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+          return chore.assignedTo.includes(child.id);
+        });
+
+        const remaining = choresForChild.filter(chore =>
+          !state.completedChores.includes(chore.id)
+        );
+
+        const li = document.createElement("li");
         const left = document.createElement("span");
-        left.textContent = `${child.name} – ${state.completedChores.length} corvées, ${state.stars}⭐`;
+        const remainingLabels = remaining.map(c => c.label).join(", ");
+
+        left.textContent =
+          `${child.name} – ${state.completedChores.length} corvées, ` +
+          `${state.stars}⭐. À faire : ${remainingLabels || "aucune"}`;
 
         li.appendChild(left);
         list.appendChild(li);
