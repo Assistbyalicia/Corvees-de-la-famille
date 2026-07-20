@@ -108,6 +108,11 @@
       align-items: baseline;
       gap: 0.5rem;
     }
+
+    .small {
+      font-size: 0.8rem;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -116,7 +121,10 @@
       <h1>Carnet de quêtes</h1>
       <span id="total-stars" class="badge">⭐ 0 étoiles</span>
     </div>
-    <p>Choisis l'enfant actif puis valide les corvées du jour.</p>
+    <p class="small">
+      Choisis l'enfant actif puis valide les corvées du jour.
+      La configuration vient de N8N, l'état du jour est gardé localement.
+    </p>
     <div class="children" id="children"></div>
   </div>
 
@@ -140,33 +148,30 @@
 
   <script>
     const STORAGE_KEY = "corvees-famille-v1";
+    const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
 
     const defaultData = {
       children: [
         { id: "lea", name: "Léa" },
         { id: "max", name: "Max" }
       ],
+      adults: [
+        { id: "maman", name: "Maman" }
+      ],
       chores: [
-        { id: "chambre", label: "Ranger la chambre", stars: 2 },
-        { id: "table", label: "Mettre la table", stars: 1 },
-        { id: "vaisselle", label: "Aider pour la vaisselle", stars: 2 },
-        { id: "linge", label: "Plier le linge", stars: 1 }
+        { id: "chambre", label: "Ranger la chambre", stars: 2, assignedTo: ["lea"] }
       ],
       rewards: [
-        { id: "film", label: "Choisir le film du soir", cost: 5 },
-        { id: "ecran", label: "15 min de temps d'écran", cost: 4 },
-        { id: "dessert", label: "Dessert spécial", cost: 3 }
+        { id: "ecran", label: "15 min de temps d’écran", cost: 4 },
+        { id: "film", label: "Choisir le film du soir", cost: 5 }
       ],
       activeChildId: "lea",
-      // Étoiles et corvées complétées par enfant et par jour
       state: {}
     };
 
     function loadData() {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return { ...defaultData };
-      }
+      if (!raw) return { ...defaultData };
       try {
         const parsed = JSON.parse(raw);
         return { ...defaultData, ...parsed };
@@ -180,7 +185,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
 
-    let data = loadData();
+    let data = null;
 
     function getTodayKey() {
       const d = new Date();
@@ -242,7 +247,13 @@
 
       const childState = getChildDayState(data.activeChildId);
 
-      data.chores.forEach(chore => {
+      // Si tu utilises assignedTo, on peut filtrer ici
+      const choresForChild = data.chores.filter(chore => {
+        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+        return chore.assignedTo.includes(data.activeChildId);
+      });
+
+      choresForChild.forEach(chore => {
         const li = document.createElement("li");
 
         const left = document.createElement("span");
@@ -283,6 +294,12 @@
         li.appendChild(right);
         list.appendChild(li);
       });
+
+      if (choresForChild.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
+        list.appendChild(li);
+      }
     }
 
     function renderRewards() {
@@ -299,13 +316,12 @@
 
         const btn = document.createElement("button");
         btn.textContent = "Acheter";
-
         btn.disabled = childState.stars < reward.cost;
 
         btn.addEventListener("click", () => {
-          const childState = getChildDayState(data.activeChildId);
-          if (childState.stars >= reward.cost) {
-            childState.stars -= reward.cost;
+          const state = getChildDayState(data.activeChildId);
+          if (state.stars >= reward.cost) {
+            state.stars -= reward.cost;
             saveData(data);
             renderAll();
             alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
@@ -316,6 +332,12 @@
         li.appendChild(btn);
         list.appendChild(li);
       });
+
+      if (data.rewards.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune récompense configurée.";
+        list.appendChild(li);
+      }
     }
 
     function getActiveChildName() {
@@ -331,7 +353,34 @@
       renderRewards();
     }
 
-    renderAll();
+    async function initApp() {
+      const local = loadData();
+
+      try {
+        const res = await fetch(API_CONFIG_URL);
+        if (!res.ok) throw new Error("API config non disponible");
+        const config = await res.json();
+
+        data = {
+          ...defaultData,
+          ...local,
+          children: config.children || defaultData.children,
+          adults: config.adults || defaultData.adults,
+          chores: config.chores || defaultData.chores,
+          rewards: config.rewards || defaultData.rewards,
+          activeChildId:
+            local.activeChildId ||
+            (config.children && config.children.length > 0 ? config.children[0].id : defaultData.activeChildId)
+        };
+      } catch (e) {
+        console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
+        data = local;
+      }
+
+      renderAll();
+    }
+
+    initApp();
   </script>
 </body>
 </html>
