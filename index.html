@@ -1,464 +1,337 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carnet de quêtes</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+  <meta charset="UTF-8" />
+  <title>Carnet de quêtes - Corvées de la famille</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f5f5f5;
+    }
 
-:root{
-  --bg:#16302A;
-  --bg-2:#1E3E36;
-  --card:#FBF6E9;
-  --card-2:#F2EAD4;
-  --ink:#1B2B22;
-  --muted:#6B7A6F;
-  --gold:#E8A33D;
-  --gold-dark:#8A5A16;
-  --coral:#E2673F;
-  --sage:#4E9169;
-  --line: rgba(251,246,233,0.14);
-}
-*{box-sizing:border-box;}
-body{
-  margin:0;
-  background: radial-gradient(ellipse at top, var(--bg-2), var(--bg) 65%);
-  font-family:'Nunito',sans-serif;
-  color:var(--card);
-  min-height:100vh;
-  padding-bottom:2rem;
-}
-.wrap{max-width:440px;margin:0 auto;padding:1.1rem 1rem 2rem;}
-h1,h2,h3{font-family:'Baloo 2',sans-serif;margin:0;}
-.eyebrow{
-  font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);
-  font-weight:700;margin-bottom:2px;
-}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.1rem;}
-.header h1{font-size:22px;color:var(--card);font-weight:700;}
-.gear{
-  background:var(--bg-2);border:1px solid var(--line);color:var(--card);
-  width:38px;height:38px;border-radius:12px;font-size:17px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.gear:active{transform:scale(0.94);}
+    h1, h2 {
+      margin: 0 0 0.5rem;
+    }
 
-.kids-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:1.2rem;-webkit-overflow-scrolling:touch;}
-.kid-chip{
-  flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;
-  background:none;border:none;cursor:pointer;padding:2px;width:64px;
-}
-.kid-avatar{
-  width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-family:'Baloo 2',sans-serif;font-weight:700;font-size:19px;color:#fff;
-  border:3px solid transparent;transition:border-color .15s;
-}
-.kid-chip.active .kid-avatar{border-color:var(--gold);}
-.kid-name{font-size:11.5px;font-weight:700;color:var(--card);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px;}
-.kid-stars{font-size:10.5px;color:var(--gold);font-weight:700;}
-.kid-add{
-  width:52px;height:52px;border-radius:50%;border:2px dashed var(--line);
-  display:flex;align-items:center;justify-content:center;color:var(--card);font-size:22px;
-}
+    .section {
+      background: #ffffff;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
 
-.trail-card{
-  background:var(--bg-2);border:1px solid var(--line);border-radius:16px;
-  padding:1rem 1.1rem;margin-bottom:1rem;
-}
-.trail-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem;}
-.trail-title{font-size:13px;color:var(--card);opacity:.8;font-weight:700;}
-.star-total{display:flex;align-items:center;gap:5px;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:700;color:var(--gold);}
-.trail-track{position:relative;height:10px;background:rgba(251,246,233,0.12);border-radius:6px;overflow:hidden;}
-.trail-fill{height:100%;background:linear-gradient(90deg,var(--sage),var(--gold));border-radius:6px;transition:width .4s ease;}
-.trail-bottom{display:flex;justify-content:space-between;margin-top:6px;font-size:11.5px;color:var(--card);opacity:.65;}
-.chest{font-size:15px;}
-.chest.open{animation:bounce .6s ease;}
-@keyframes bounce{0%{transform:scale(1);}40%{transform:scale(1.35) rotate(-8deg);}100%{transform:scale(1);}}
+    .children {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
 
-.section-title{font-size:14px;font-weight:800;color:var(--card);margin:1.3rem 0 .6rem;display:flex;align-items:center;justify-content:space-between;}
-.section-title button{
-  background:none;border:1px solid var(--line);color:var(--card);border-radius:8px;
-  font-size:11px;padding:5px 9px;cursor:pointer;font-family:'Nunito';font-weight:700;
-}
+    .child {
+      padding: 0.5rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: #fafafa;
+    }
 
-.quest{
-  background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:9px;
-  display:flex;align-items:center;gap:12px;cursor:pointer;transition:opacity .15s, transform .1s;
-  border:1px solid var(--card-2);
-}
-.quest:active{transform:scale(0.98);}
-.quest.done{opacity:.55;}
-.quest-check{
-  width:26px;height:26px;border-radius:8px;border:2px solid var(--sage);flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--sage);font-weight:800;
-}
-.quest.done .quest-check{background:var(--sage);color:#fff;}
-.quest-name{font-weight:700;color:var(--ink);font-size:14.5px;flex:1;}
-.quest.done .quest-name{text-decoration:line-through;color:var(--muted);}
-.quest-pts{
-  font-family:'Baloo 2',sans-serif;font-weight:700;font-size:13px;color:var(--gold-dark);
-  background:#FBEAD1;padding:4px 9px;border-radius:20px;flex-shrink:0;
-}
-.empty{color:var(--card);opacity:.55;font-size:13px;padding:.6rem 0;}
+    .child.active {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
 
-.shop{background:var(--bg-2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:9px;display:flex;align-items:center;gap:12px;}
-.shop-name{flex:1;font-weight:700;font-size:14px;color:var(--card);}
-.shop-cost{font-size:12px;color:var(--gold);font-weight:700;margin-right:2px;}
-.shop-btn{
-  background:var(--gold);color:#3D2607;border:none;border-radius:9px;padding:8px 12px;
-  font-weight:800;font-size:12.5px;cursor:pointer;font-family:'Nunito';flex-shrink:0;
-}
-.shop-btn:disabled{background:rgba(251,246,233,0.12);color:rgba(251,246,233,0.35);cursor:not-allowed;}
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: #e0e0e0;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
 
-.overlay{
-  position:fixed;inset:0;background:rgba(10,20,16,0.72);display:none;
-  align-items:flex-end;justify-content:center;z-index:50;
-}
-.overlay.show{display:flex;}
-.modal{
-  background:var(--bg-2);width:100%;max-width:440px;border-radius:20px 20px 0 0;
-  padding:1.1rem 1.1rem 1.6rem;max-height:82vh;overflow-y:auto;
-}
-.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}
-.modal-head h2{font-size:18px;color:var(--card);}
-.modal-close{background:none;border:none;color:var(--card);font-size:20px;cursor:pointer;}
-.tabs{display:flex;gap:6px;margin-bottom:1rem;}
-.tab{flex:1;background:rgba(251,246,233,0.08);border:none;color:var(--card);opacity:.6;padding:8px;border-radius:9px;font-family:'Nunito';font-weight:700;font-size:12.5px;cursor:pointer;}
-.tab.active{background:var(--gold);color:#3D2607;opacity:1;}
-.mgmt-row{display:flex;align-items:center;gap:10px;background:rgba(251,246,233,0.06);border-radius:10px;padding:9px 10px;margin-bottom:8px;}
-.mgmt-row .lbl{flex:1;color:var(--card);font-weight:700;font-size:13.5px;}
-.mgmt-row .sub{color:var(--gold);font-size:12px;font-weight:700;}
-.del{background:none;border:none;color:var(--coral);font-size:16px;cursor:pointer;}
-.dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;}
-.addform{display:flex;gap:6px;margin-top:4px;}
-.addform input{
-  flex:1;background:rgba(251,246,233,0.08);border:1px solid var(--line);border-radius:9px;
-  padding:9px 10px;color:var(--card);font-family:'Nunito';font-size:13.5px;
-}
-.addform input::placeholder{color:rgba(251,246,233,0.4);}
-.addform input[type=number]{width:64px;flex:none;}
-.addform button{
-  background:var(--sage);border:none;color:#fff;border-radius:9px;padding:0 14px;
-  font-weight:800;cursor:pointer;font-family:'Nunito';
-}
-.palette{display:flex;gap:7px;margin:8px 0;flex-wrap:wrap;}
-.swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
-.swatch.sel{border-color:var(--card);}
-</style>
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #28a745;
+      transition: width 0.2s ease;
+    }
+
+    .list {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+    }
+
+    .list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
+    }
+
+    .list li:last-child {
+      border-bottom: none;
+    }
+
+    button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.85rem;
+      border-radius: 0.25rem;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #f0f0f0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      background: #ffe58f;
+      font-size: 0.75rem;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+  </style>
 </head>
 <body>
-<div class="wrap">
-
-  <div class="header">
-    <div>
-      <div class="eyebrow">Corvées de la famille</div>
+  <div class="section">
+    <div class="header-row">
       <h1>Carnet de quêtes</h1>
+      <span id="total-stars" class="badge">⭐ 0 étoiles</span>
     </div>
-    <button class="gear" id="openSettings" aria-label="Réglages">⚙️</button>
+    <p>Choisis l'enfant actif puis valide les corvées du jour.</p>
+    <div class="children" id="children"></div>
   </div>
 
-  <div class="kids-row" id="kidsRow"></div>
-
-  <div class="trail-card">
-    <div class="trail-top">
-      <div class="trail-title">Progression du jour</div>
-      <div class="star-total">⭐ <span id="starTotal">0</span></div>
-    </div>
-    <div class="trail-track"><div class="trail-fill" id="trailFill" style="width:0%"></div></div>
-    <div class="trail-bottom">
-      <span id="trailLabel">0 / 0 quêtes faites</span>
-      <span class="chest" id="chest">🧰</span>
+  <div class="section">
+    <h2>Progression du jour</h2>
+    <p id="progress-text">0 / 0 corvées complétées</p>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
     </div>
   </div>
 
-  <div class="section-title">Quêtes du jour</div>
-  <div id="questList"></div>
-
-  <div class="section-title">Boutique de récompenses</div>
-  <div id="shopList"></div>
-
-</div>
-
-<div class="overlay" id="overlay">
-  <div class="modal">
-    <div class="modal-head">
-      <h2>Réglages</h2>
-      <button class="modal-close" id="closeSettings">✕</button>
-    </div>
-    <div class="tabs">
-      <button class="tab active" data-tab="enfants">Enfants</button>
-      <button class="tab" data-tab="corvees">Corvées</button>
-      <button class="tab" data-tab="recompenses">Récompenses</button>
-    </div>
-    <div id="tabContent"></div>
+  <div class="section">
+    <h2>Quêtes du jour</h2>
+    <ul class="list" id="chores-list"></ul>
   </div>
-</div>
 
-<script>
-const COLORS = ['#4A7FB5','#D65A89','#8B6DB5','#4FA88F','#E2673F','#C9A227'];
-const DEFAULT_STATE = {
-  children: [
-    {id:'c1', name:'Enfant 1', color:COLORS[0]},
-    {id:'c2', name:'Enfant 2', color:COLORS[1]}
-  ],
-  chores: [
-    {id:'q1', name:'Ranger sa chambre', points:5},
-    {id:'q2', name:'Mettre la table', points:2},
-    {id:'q3', name:'Débarrasser la table', points:2},
-    {id:'q4', name:'Faire son lit', points:2},
-    {id:'q5', name:'Sortir les poubelles', points:3},
-    {id:'q6', name:'Ranger ses chaussures', points:1}
-  ],
-  rewards: [
-    {id:'r1', name:'30 min d\\'écran en plus', cost:20},
-    {id:'r2', name:'Choisir le film du soir', cost:15},
-    {id:'r3', name:'Dessert au choix', cost:10},
-    {id:'r4', name:'Sortie au parc', cost:40}
-  ],
-  totals: {},
-  doneDate: '',
-  doneToday: {},
-  activeChild: 'c1'
-};
+  <div class="section">
+    <h2>Boutique de récompenses</h2>
+    <ul class="list" id="rewards-list"></ul>
+  </div>
 
-let state = null;
-const todayStr = () => new Date().toISOString().slice(0,10);
-const uid = () => 't' + Math.random().toString(36).slice(2,9);
+  <script>
+    const STORAGE_KEY = "corvees-famille-v1";
 
-async function loadState(){
-  try{
-    const res = await window.storage.get('etat', false);
-    state = res ? JSON.parse(res.value) : structuredClone(DEFAULT_STATE);
-  }catch(e){
-    state = structuredClone(DEFAULT_STATE);
-  }
-  if(!state.children.length) state.children = structuredClone(DEFAULT_STATE.children);
-  if(state.doneDate !== todayStr()){
-    state.doneDate = todayStr();
-    state.doneToday = {};
-  }
-  if(!state.children.find(c=>c.id===state.activeChild)) state.activeChild = state.children[0].id;
-  render();
-}
-
-async function saveState(){
-  try{ await window.storage.set('etat', JSON.stringify(state), false); }
-  catch(e){ console.error('Erreur de sauvegarde', e); }
-}
-
-function initials(name){ return name.trim().slice(0,2).toUpperCase(); }
-
-function render(){
-  renderKids();
-  renderTrail();
-  renderQuests();
-  renderShop();
-}
-
-function renderKids(){
-  const row = document.getElementById('kidsRow');
-  row.innerHTML = '';
-  state.children.forEach(c=>{
-    const btn = document.createElement('button');
-    btn.className = 'kid-chip' + (c.id===state.activeChild ? ' active' : '');
-    btn.innerHTML = `<div class="kid-avatar" style="background:${c.color}">${initials(c.name)}</div>
-      <div class="kid-name">${c.name}</div>
-      <div class="kid-stars">⭐ ${state.totals[c.id]||0}</div>`;
-    btn.onclick = ()=>{ state.activeChild = c.id; render(); };
-    row.appendChild(btn);
-  });
-}
-
-function renderTrail(){
-  const done = (state.doneToday[state.activeChild]||[]).filter(id=>id!=='bonus');
-  const total = state.chores.length;
-  const pct = total ? Math.round(done.length/total*100) : 0;
-  document.getElementById('trailFill').style.width = pct+'%';
-  document.getElementById('trailLabel').textContent = `${done.length} / ${total} quêtes faites`;
-  document.getElementById('starTotal').textContent = state.totals[state.activeChild]||0;
-  const chest = document.getElementById('chest');
-  chest.textContent = pct>=100 && total>0 ? '🎁' : '🧰';
-  if(pct>=100 && total>0) { chest.classList.add('open'); setTimeout(()=>chest.classList.remove('open'),600); }
-}
-
-function renderQuests(){
-  const list = document.getElementById('questList');
-  list.innerHTML = '';
-  if(!state.chores.length){ list.innerHTML = '<div class="empty">Aucune corvée. Ajoute-en dans les réglages ⚙️</div>'; return; }
-  const done = state.doneToday[state.activeChild]||[];
-  state.chores.forEach(q=>{
-    const isDone = done.includes(q.id);
-    const el = document.createElement('div');
-    el.className = 'quest' + (isDone?' done':'');
-    el.innerHTML = `<div class="quest-check">${isDone?'✓':''}</div>
-      <div class="quest-name">${q.name}</div>
-      <div class="quest-pts">⭐ ${q.points}</div>`;
-    el.onclick = ()=> toggleQuest(q);
-    list.appendChild(el);
-  });
-}
-
-function toggleQuest(q){
-  const kid = state.activeChild;
-  if(!state.doneToday[kid]) state.doneToday[kid] = [];
-  const arr = state.doneToday[kid];
-  const idx = arr.indexOf(q.id);
-  if(!state.totals[kid]) state.totals[kid] = 0;
-  const wasFullBefore = state.chores.length>0 && state.chores.every(c=>arr.includes(c.id));
-  if(idx>-1){
-    arr.splice(idx,1);
-    state.totals[kid] = Math.max(0, state.totals[kid]-q.points);
-  } else {
-    arr.push(q.id);
-    state.totals[kid] += q.points;
-  }
-  const isFullNow = state.chores.length>0 && state.chores.every(c=>arr.includes(c.id));
-  if(isFullNow && !wasFullBefore && !arr.includes('bonus')){
-    arr.push('bonus');
-    state.totals[kid] += 5;
-  }
-  if(!isFullNow && arr.includes('bonus')){
-    arr.splice(arr.indexOf('bonus'),1);
-    state.totals[kid] = Math.max(0, state.totals[kid]-5);
-  }
-  render();
-  saveState();
-}
-
-function renderShop(){
-  const list = document.getElementById('shopList');
-  list.innerHTML = '';
-  if(!state.rewards.length){ list.innerHTML = '<div class="empty">Aucune récompense. Ajoute-en dans les réglages ⚙️</div>'; return; }
-  const stars = state.totals[state.activeChild]||0;
-  state.rewards.forEach(r=>{
-    const el = document.createElement('div');
-    el.className = 'shop';
-    const can = stars >= r.cost;
-    el.innerHTML = `<div class="shop-name">${r.name}</div>
-      <div class="shop-cost">⭐ ${r.cost}</div>
-      <button class="shop-btn" ${can?'':'disabled'}>Échanger</button>`;
-    el.querySelector('button').onclick = ()=> redeemReward(r);
-    list.appendChild(el);
-  });
-}
-
-function redeemReward(r){
-  const kid = state.activeChild;
-  if((state.totals[kid]||0) < r.cost) return;
-  state.totals[kid] -= r.cost;
-  render();
-  saveState();
-}
-
-// Réglages
-const overlay = document.getElementById('overlay');
-document.getElementById('openSettings').onclick = ()=>{ overlay.classList.add('show'); renderTab('enfants'); };
-document.getElementById('closeSettings').onclick = ()=> overlay.classList.remove('show');
-overlay.onclick = (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); };
-
-document.querySelectorAll('.tab').forEach(t=>{
-  t.onclick = ()=>{
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-    t.classList.add('active');
-    renderTab(t.dataset.tab);
-  };
-});
-
-function renderTab(tab){
-  const c = document.getElementById('tabContent');
-  if(tab==='enfants'){
-    c.innerHTML = state.children.map(k=>`
-      <div class="mgmt-row">
-        <div class="dot" style="background:${k.color}"></div>
-        <div class="lbl">${k.name}</div>
-        <button class="del" data-id="${k.id}" data-type="child">✕</button>
-      </div>`).join('') +
-      `<div class="addform" style="flex-direction:column;align-items:stretch;">
-        <input type="text" id="newChildName" placeholder="Prénom">
-        <div class="palette" id="newChildPalette"></div>
-        <div style="display:flex;justify-content:flex-end;"><button id="addChildBtn">Ajouter</button></div>
-      </div>`;
-    const pal = document.getElementById('newChildPalette');
-    let selColor = COLORS[0];
-    COLORS.forEach(col=>{
-      const sw = document.createElement('div');
-      sw.className = 'swatch'+(col===selColor?' sel':'');
-      sw.style.background = col;
-      sw.onclick = ()=>{ selColor=col; pal.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel')); sw.classList.add('sel'); };
-      pal.appendChild(sw);
-    });
-    document.getElementById('addChildBtn').onclick = ()=>{
-      const name = document.getElementById('newChildName').value.trim();
-      if(!name) return;
-      state.children.push({id:uid(), name, color:selColor});
-      saveState(); render(); renderTab('enfants');
+    const defaultData = {
+      children: [
+        { id: "lea", name: "Léa" },
+        { id: "max", name: "Max" }
+      ],
+      chores: [
+        { id: "chambre", label: "Ranger la chambre", stars: 2 },
+        { id: "table", label: "Mettre la table", stars: 1 },
+        { id: "vaisselle", label: "Aider pour la vaisselle", stars: 2 },
+        { id: "linge", label: "Plier le linge", stars: 1 }
+      ],
+      rewards: [
+        { id: "film", label: "Choisir le film du soir", cost: 5 },
+        { id: "ecran", label: "15 min de temps d'écran", cost: 4 },
+        { id: "dessert", label: "Dessert spécial", cost: 3 }
+      ],
+      activeChildId: "lea",
+      // Étoiles et corvées complétées par enfant et par jour
+      state: {}
     };
-    c.querySelectorAll('[data-type=child]').forEach(b=>{
-      b.onclick = ()=>{
-        if(state.children.length<=1) return;
-        state.children = state.children.filter(k=>k.id!==b.dataset.id);
-        delete state.totals[b.dataset.id];
-        delete state.doneToday[b.dataset.id];
-        if(state.activeChild===b.dataset.id) state.activeChild = state.children[0].id;
-        saveState(); render(); renderTab('enfants');
-      };
-    });
-  } else if(tab==='corvees'){
-    c.innerHTML = state.chores.map(q=>`
-      <div class="mgmt-row">
-        <div class="lbl">${q.name}</div>
-        <div class="sub">⭐ ${q.points}</div>
-        <button class="del" data-id="${q.id}" data-type="chore">✕</button>
-      </div>`).join('') +
-      `<div class="addform">
-        <input type="text" id="newChoreName" placeholder="Nom de la corvée">
-        <input type="number" id="newChorePts" placeholder="pts" min="1" value="2">
-        <button id="addChoreBtn">+</button>
-      </div>`;
-    document.getElementById('addChoreBtn').onclick = ()=>{
-      const name = document.getElementById('newChoreName').value.trim();
-      const pts = parseInt(document.getElementById('newChorePts').value)||1;
-      if(!name) return;
-      state.chores.push({id:uid(), name, points:pts});
-      saveState(); render(); renderTab('corvees');
-    };
-    c.querySelectorAll('[data-type=chore]').forEach(b=>{
-      b.onclick = ()=>{
-        state.chores = state.chores.filter(q=>q.id!==b.dataset.id);
-        Object.keys(state.doneToday).forEach(k=> state.doneToday[k] = (state.doneToday[k]||[]).filter(id=>id!==b.dataset.id));
-        saveState(); render(); renderTab('corvees');
-      };
-    });
-  } else {
-    c.innerHTML = state.rewards.map(r=>`
-      <div class="mgmt-row">
-        <div class="lbl">${r.name}</div>
-        <div class="sub">⭐ ${r.cost}</div>
-        <button class="del" data-id="${r.id}" data-type="reward">✕</button>
-      </div>`).join('') +
-      `<div class="addform">
-        <input type="text" id="newRewardName" placeholder="Nom de la récompense">
-        <input type="number" id="newRewardCost" placeholder="pts" min="1" value="10">
-        <button id="addRewardBtn">+</button>
-      </div>`;
-    document.getElementById('addRewardBtn').onclick = ()=>{
-      const name = document.getElementById('newRewardName').value.trim();
-      const cost = parseInt(document.getElementById('newRewardCost').value)||1;
-      if(!name) return;
-      state.rewards.push({id:uid(), name, cost});
-      saveState(); render(); renderTab('recompenses');
-    };
-    c.querySelectorAll('[data-type=reward]').forEach(b=>{
-      b.onclick = ()=>{
-        state.rewards = state.rewards.filter(r=>r.id!==b.dataset.id);
-        saveState(); render(); renderTab('recompenses');
-      };
-    });
-  }
-}
 
-loadState();
-</script>
+    function loadData() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return { ...defaultData };
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        return { ...defaultData, ...parsed };
+      } catch (e) {
+        console.error("Erreur de parsing localStorage", e);
+        return { ...defaultData };
+      }
+    }
+
+    function saveData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    let data = loadData();
+
+    function getTodayKey() {
+      const d = new Date();
+      return d.toISOString().slice(0, 10); // AAAA-MM-JJ
+    }
+
+    function getChildDayState(childId) {
+      const dayKey = getTodayKey();
+      if (!data.state[childId]) {
+        data.state[childId] = {};
+      }
+      if (!data.state[childId][dayKey]) {
+        data.state[childId][dayKey] = {
+          completedChores: [],
+          stars: 0
+        };
+      }
+      return data.state[childId][dayKey];
+    }
+
+    function renderChildren() {
+      const container = document.getElementById("children");
+      container.innerHTML = "";
+      data.children.forEach(child => {
+        const btn = document.createElement("button");
+        btn.className = "child" + (child.id === data.activeChildId ? " active" : "");
+        btn.textContent = child.name;
+        btn.addEventListener("click", () => {
+          data.activeChildId = child.id;
+          saveData(data);
+          renderAll();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderProgress() {
+      const progressText = document.getElementById("progress-text");
+      const progressFill = document.getElementById("progress-fill");
+
+      const childState = getChildDayState(data.activeChildId);
+      const completed = childState.completedChores.length;
+      const total = data.chores.length;
+      const ratio = total === 0 ? 0 : (completed / total) * 100;
+
+      progressText.textContent = `${completed} / ${total} corvées complétées`;
+      progressFill.style.width = `${ratio}%`;
+    }
+
+    function renderTotalStars() {
+      const badge = document.getElementById("total-stars");
+      const childState = getChildDayState(data.activeChildId);
+      badge.textContent = `⭐ ${childState.stars} étoiles`;
+    }
+
+    function renderChores() {
+      const list = document.getElementById("chores-list");
+      list.innerHTML = "";
+
+      const childState = getChildDayState(data.activeChildId);
+
+      data.chores.forEach(chore => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+
+        const right = document.createElement("div");
+
+        const completed = childState.completedChores.includes(chore.id);
+
+        const status = document.createElement("span");
+        status.className = "badge";
+        status.textContent = completed ? "Déjà fait" : "À faire";
+
+        const btn = document.createElement("button");
+        btn.textContent = completed ? "Annuler" : "Valider";
+
+        btn.addEventListener("click", () => {
+          const childState = getChildDayState(data.activeChildId);
+          const index = childState.completedChores.indexOf(chore.id);
+
+          if (index === -1) {
+            childState.completedChores.push(chore.id);
+            childState.stars += chore.stars;
+          } else {
+            childState.completedChores.splice(index, 1);
+            childState.stars -= chore.stars;
+            if (childState.stars < 0) childState.stars = 0;
+          }
+
+          saveData(data);
+          renderAll();
+        });
+
+        right.appendChild(status);
+        right.appendChild(btn);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        list.appendChild(li);
+      });
+    }
+
+    function renderRewards() {
+      const list = document.getElementById("rewards-list");
+      list.innerHTML = "";
+
+      const childState = getChildDayState(data.activeChildId);
+
+      data.rewards.forEach(reward => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${reward.label} (${reward.cost}⭐)`;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Acheter";
+
+        btn.disabled = childState.stars < reward.cost;
+
+        btn.addEventListener("click", () => {
+          const childState = getChildDayState(data.activeChildId);
+          if (childState.stars >= reward.cost) {
+            childState.stars -= reward.cost;
+            saveData(data);
+            renderAll();
+            alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
+          }
+        });
+
+        li.appendChild(left);
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+    }
+
+    function getActiveChildName() {
+      const child = data.children.find(c => c.id === data.activeChildId);
+      return child ? child.name : "";
+    }
+
+    function renderAll() {
+      renderChildren();
+      renderProgress();
+      renderTotalStars();
+      renderChores();
+      renderRewards();
+    }
+
+    renderAll();
+  </script>
 </body>
 </html>
