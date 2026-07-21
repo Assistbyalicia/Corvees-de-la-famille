@@ -176,23 +176,23 @@
     <div class="section">
       <h2>Vue adultes</h2>
       <p class="small">
-        Résumé des corvées, étoiles et progression par enfant pour la journée actuelle.
+        Résumé des corvées, étoiles et progression par personne pour la journée actuelle.
       </p>
     </div>
 
-    <!-- Sections par enfant -->
+    <!-- Sections enfants + adultes -->
     <div id="adults-children-sections"></div>
 
     <!-- Formulaire d'ajout de corvée -->
     <div class="section">
       <h2>Ajouter une corvée</h2>
       <p class="small">
-        Crée une nouvelle corvée et assigne-la à un enfant.
+        Crée une nouvelle corvée et assigne-la à une personne.
       </p>
       <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
         <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
         <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
-        <select id="new-chore-child" style="padding:0.25rem;">
+        <select id="new-chore-person" style="padding:0.25rem;">
           <!-- options remplies en JS -->
         </select>
         <button id="add-chore-btn">Ajouter</button>
@@ -209,22 +209,13 @@
     // URL de journalisation (workflow 2)
     const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
 
+    // Fallback minimal si la config N8N est indisponible
     const defaultData = {
-      children: [
-        { id: "lea", name: "Léa" },
-        { id: "max", name: "Max" }
-      ],
-      adults: [
-        { id: "maman", name: "Maman" }
-      ],
-      chores: [
-        { id: "chambre", label: "Ranger la chambre", stars: 2, assignedTo: ["lea"] }
-      ],
-      rewards: [
-        { id: "ecran", label: "15 min de temps d’écran", cost: 4 },
-        { id: "film", label: "Choisir le film du soir", cost: 5 }
-      ],
-      activeChildId: "lea",
+      children: [],
+      adults: [],
+      chores: [],
+      rewards: [],
+      activeChildId: null,
       state: {}
     };
 
@@ -251,24 +242,28 @@
       return d.toISOString().slice(0, 10); // AAAA-MM-JJ
     }
 
-    function getChildDayState(childId) {
+    function getChildDayState(personId) {
       const dayKey = getTodayKey();
-      if (!data.state[childId]) {
-        data.state[childId] = {};
+      if (!data.state[personId]) {
+        data.state[personId] = {};
       }
-      if (!data.state[childId][dayKey]) {
-        data.state[childId][dayKey] = {
+      if (!data.state[personId][dayKey]) {
+        data.state[personId][dayKey] = {
           completedChores: [],
           stars: 0
         };
       }
-      return data.state[childId][dayKey];
+      return data.state[personId][dayKey];
     }
 
     function renderChildren() {
       const container = document.getElementById("children");
       container.innerHTML = "";
-      data.children.forEach(child => {
+
+      // Vue enfants : ne montrer que les personnes de type "Enfant"
+      const childrenOnly = data.children.filter(p => p.type === "Enfant" || !p.type);
+
+      childrenOnly.forEach(child => {
         const btn = document.createElement("button");
         btn.className = "child" + (child.id === data.activeChildId ? " active" : "");
         btn.textContent = child.name;
@@ -280,7 +275,7 @@
         container.appendChild(btn);
       });
 
-      if (data.children.length === 0) {
+      if (childrenOnly.length === 0) {
         const span = document.createElement("span");
         span.textContent = "Aucun enfant configuré.";
         container.appendChild(span);
@@ -291,9 +286,22 @@
       const progressText = document.getElementById("progress-text");
       const progressFill = document.getElementById("progress-fill");
 
+      if (!data.activeChildId) {
+        progressText.textContent = "Aucun enfant actif";
+        progressFill.style.width = "0%";
+        return;
+      }
+
       const childState = getChildDayState(data.activeChildId);
-      const completed = childState.completedChores.length;
-      const total = data.chores.length;
+      const choresForChild = data.chores.filter(chore => {
+        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+        return chore.assignedTo.includes(data.activeChildId);
+      });
+
+      const total = choresForChild.length;
+      const completed = childState.completedChores.filter(id =>
+        choresForChild.some(chore => chore.id === id)
+      ).length;
       const ratio = total === 0 ? 0 : (completed / total) * 100;
 
       progressText.textContent = `${completed} / ${total} corvées complétées`;
@@ -302,6 +310,10 @@
 
     function renderTotalStars() {
       const badge = document.getElementById("total-stars");
+      if (!data.activeChildId) {
+        badge.textContent = "⭐ 0 étoiles";
+        return;
+      }
       const childState = getChildDayState(data.activeChildId);
       badge.textContent = `⭐ ${childState.stars} étoiles`;
     }
@@ -309,6 +321,13 @@
     function renderChores() {
       const list = document.getElementById("chores-list");
       list.innerHTML = "";
+
+      if (!data.activeChildId) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun enfant actif.";
+        list.appendChild(li);
+        return;
+      }
 
       const childState = getChildDayState(data.activeChildId);
 
@@ -388,6 +407,13 @@
       const list = document.getElementById("rewards-list");
       list.innerHTML = "";
 
+      if (!data.activeChildId) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun enfant actif.";
+        list.appendChild(li);
+        return;
+      }
+
       const childState = getChildDayState(data.activeChildId);
 
       data.rewards.forEach(reward => {
@@ -427,26 +453,31 @@
       return child ? child.name : "";
     }
 
-    // Vue adultes détaillée par enfant
+    // Vue adultes détaillée par enfant + adulte
     function renderAdultsSummary() {
       const container = document.getElementById("adults-children-sections");
       if (!container) return;
       container.innerHTML = "";
 
-      data.children.forEach(child => {
-        const state = getChildDayState(child.id);
+      const allPeople = [
+        ...data.children,
+        ...data.adults
+      ];
 
-        const choresForChild = data.chores.filter(chore => {
-          if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-          return chore.assignedTo.includes(child.id);
+      allPeople.forEach(person => {
+        const state = getChildDayState(person.id);
+
+        const choresForPerson = data.chores.filter(chore => {
+          if (!chore.assignedTo || chore.assignedTo.length === 0) return false;
+          return chore.assignedTo.includes(person.id);
         });
 
-        const totalChores = choresForChild.length;
+        const totalChores = choresForPerson.length;
         const completedCount = state.completedChores.filter(id =>
-          choresForChild.some(chore => chore.id === id)
+          choresForPerson.some(chore => chore.id === id)
         ).length;
 
-        const remaining = choresForChild.filter(chore =>
+        const remaining = choresForPerson.filter(chore =>
           !state.completedChores.includes(chore.id)
         );
 
@@ -457,7 +488,7 @@
         section.className = "section";
 
         const title = document.createElement("h3");
-        title.textContent = child.name;
+        title.textContent = person.name;
 
         const summary = document.createElement("p");
         summary.className = "small";
@@ -488,10 +519,10 @@
         container.appendChild(section);
       });
 
-      if (data.children.length === 0) {
+      if (allPeople.length === 0) {
         const section = document.createElement("div");
         section.className = "section";
-        section.textContent = "Aucun enfant configuré.";
+        section.textContent = "Aucune personne configurée.";
         container.appendChild(section);
       }
     }
@@ -529,26 +560,27 @@
 
     // Formulaire d'ajout de corvée côté adultes
     function setupAddChoreForm() {
-      const selectChild = document.getElementById("new-chore-child");
+      const selectPerson = document.getElementById("new-chore-person");
       const btnAdd = document.getElementById("add-chore-btn");
       const inputLabel = document.getElementById("new-chore-label");
       const inputStars = document.getElementById("new-chore-stars");
 
-      if (!selectChild || !btnAdd || !inputLabel || !inputStars) return;
+      if (!selectPerson || !btnAdd || !inputLabel || !inputStars) return;
 
-      // Remplir les options enfants
-      selectChild.innerHTML = "";
-      data.children.forEach(child => {
+      // Remplir les options avec tous les enfants + adultes
+      selectPerson.innerHTML = "";
+      const allPeople = [...data.children, ...data.adults];
+      allPeople.forEach(person => {
         const opt = document.createElement("option");
-        opt.value = child.id;
-        opt.textContent = child.name;
-        selectChild.appendChild(opt);
+        opt.value = person.id;
+        opt.textContent = person.name;
+        selectPerson.appendChild(opt);
       });
 
       btnAdd.addEventListener("click", () => {
         const label = inputLabel.value.trim();
         const stars = parseInt(inputStars.value, 10) || 1;
-        const childId = selectChild.value;
+        const personId = selectPerson.value;
 
         if (!label) {
           alert("Merci de saisir un nom de corvée.");
@@ -563,7 +595,7 @@
           id: newId,
           label,
           stars,
-          assignedTo: [childId]
+          assignedTo: [personId]
         });
 
         saveData(data);
@@ -596,17 +628,25 @@
         data = {
           ...defaultData,
           ...local,
-          children: config.children || defaultData.children,
-          adults: config.adults || defaultData.adults,
-          chores: config.chores || defaultData.chores,
-          rewards: config.rewards || defaultData.rewards,
+          children: config.children || local.children || defaultData.children,
+          adults: config.adults || local.adults || defaultData.adults,
+          chores: config.chores || local.chores || defaultData.chores,
+          rewards: config.rewards || local.rewards || defaultData.rewards,
           activeChildId:
             local.activeChildId ||
-            (config.children && config.children.length > 0 ? config.children[0].id : defaultData.activeChildId)
+            (config.children && config.children.length > 0 ? config.children[0].id : null)
         };
       } catch (e) {
         console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
-        data = local;
+        data = {
+          ...defaultData,
+          ...local
+        };
+      }
+
+      // Si aucun enfant actif n'est défini, prendre le premier enfant si possible
+      if (!data.activeChildId && data.children && data.children.length > 0) {
+        data.activeChildId = data.children[0].id;
       }
 
       renderAll();
