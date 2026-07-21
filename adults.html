@@ -354,7 +354,55 @@
         inputStars.value = "1";
       });
     }
+data = {
+  children: [
+    { id: "enfant-1", name: "Enfant 1" },
+    { id: "enfant-2", name: "Enfant 2" }
+  ],
+  adults: [
+    { id: "maman", name: "Maman" },
+    { id: "papa", name: "Papa" }
+  ],
+  chores: [
+    { id: "chore-1", label: "Ranger la chambre", stars: 2, assignedTo: ["enfant-1"] },
+    { id: "chore-2", label: "Vaisselle", stars: 2, assignedTo: ["maman"] },
+    { id: "chore-3", label: "Sortir les poubelles", stars: 1, assignedTo: ["papa"] }
+  ],
+  state: {
+    "enfant-1": {
+      [new Date().toISOString().slice(0, 10)]: {
+        completedChores: ["chore-1"],
+        stars: 2
+      }
+    },
+    "maman": {
+      [new Date().toISOString().slice(0, 10)]: {
+        completedChores: [],
+        stars: 0
+      }
+    },
+    "papa": {
+      [new Date().toISOString().slice(0, 10)]: {
+        completedChores: [],
+        stars: 0
+      }
+    }
+  }
+};
 
+// Et on commente initApp() et son appel :
+/*
+async function initApp() {
+  const local = loadData();
+  ...
+}
+initApp();
+*/
+
+// Remplace par :
+renderChildrenTable();
+renderAdultsSections();
+setupAddChoreForm();
     async function initApp() {
       const local = loadData();
 
