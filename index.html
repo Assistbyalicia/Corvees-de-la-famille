@@ -12,7 +12,7 @@
       background: #f5f5f5;
     }
 
-    h1, h2 {
+    h1, h2, h3 {
       margin: 0 0 0.5rem;
     }
 
@@ -120,6 +120,14 @@
       gap: 0.5rem;
       flex-wrap: wrap;
     }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      border-radius: 0.25rem;
+    }
   </style>
 </head>
 <body>
@@ -168,9 +176,27 @@
     <div class="section">
       <h2>Vue adultes</h2>
       <p class="small">
-        Résumé des corvées et des étoiles par enfant pour la journée actuelle.
+        Résumé des corvées, étoiles et progression par enfant pour la journée actuelle.
       </p>
-      <ul class="list" id="adults-summary-list"></ul>
+    </div>
+
+    <!-- Sections par enfant -->
+    <div id="adults-children-sections"></div>
+
+    <!-- Formulaire d'ajout de corvée -->
+    <div class="section">
+      <h2>Ajouter une corvée</h2>
+      <p class="small">
+        Crée une nouvelle corvée et assigne-la à un enfant.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+        <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+        <select id="new-chore-child" style="padding:0.25rem;">
+          <!-- options remplies en JS -->
+        </select>
+        <button id="add-chore-btn">Ajouter</button>
+      </div>
     </div>
   </div>
 
@@ -401,10 +427,11 @@
       return child ? child.name : "";
     }
 
+    // Vue adultes détaillée par enfant
     function renderAdultsSummary() {
-      const list = document.getElementById("adults-summary-list");
-      if (!list) return;
-      list.innerHTML = "";
+      const container = document.getElementById("adults-children-sections");
+      if (!container) return;
+      container.innerHTML = "";
 
       data.children.forEach(child => {
         const state = getChildDayState(child.id);
@@ -414,26 +441,58 @@
           return chore.assignedTo.includes(child.id);
         });
 
+        const totalChores = choresForChild.length;
+        const completedCount = state.completedChores.filter(id =>
+          choresForChild.some(chore => chore.id === id)
+        ).length;
+
         const remaining = choresForChild.filter(chore =>
           !state.completedChores.includes(chore.id)
         );
 
-        const li = document.createElement("li");
-        const left = document.createElement("span");
-        const remainingLabels = remaining.map(c => c.label).join(", ");
+        const completionRatio =
+          totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
 
-        left.textContent =
-          `${child.name} – ${state.completedChores.length} corvées, ` +
-          `${state.stars}⭐. À faire : ${remainingLabels || "aucune"}`;
+        const section = document.createElement("div");
+        section.className = "section";
 
-        li.appendChild(left);
-        list.appendChild(li);
+        const title = document.createElement("h3");
+        title.textContent = child.name;
+
+        const summary = document.createElement("p");
+        summary.className = "small";
+        summary.textContent =
+          `${completedCount}/${totalChores} corvées faites ` +
+          `(${completionRatio}%), ${state.stars}⭐.`;
+
+        const list = document.createElement("ul");
+        list.className = "list";
+
+        remaining.forEach(chore => {
+          const li = document.createElement("li");
+          const left = document.createElement("span");
+          left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+          li.appendChild(left);
+          list.appendChild(li);
+        });
+
+        if (remaining.length === 0) {
+          const li = document.createElement("li");
+          li.textContent = "Aucune corvée restante pour aujourd’hui.";
+          list.appendChild(li);
+        }
+
+        section.appendChild(title);
+        section.appendChild(summary);
+        section.appendChild(list);
+        container.appendChild(section);
       });
 
       if (data.children.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "Aucun enfant configuré.";
-        list.appendChild(li);
+        const section = document.createElement("div");
+        section.className = "section";
+        section.textContent = "Aucun enfant configuré.";
+        container.appendChild(section);
       }
     }
 
@@ -466,6 +525,54 @@
           showView("adults");
         });
       }
+    }
+
+    // Formulaire d'ajout de corvée côté adultes
+    function setupAddChoreForm() {
+      const selectChild = document.getElementById("new-chore-child");
+      const btnAdd = document.getElementById("add-chore-btn");
+      const inputLabel = document.getElementById("new-chore-label");
+      const inputStars = document.getElementById("new-chore-stars");
+
+      if (!selectChild || !btnAdd || !inputLabel || !inputStars) return;
+
+      // Remplir les options enfants
+      selectChild.innerHTML = "";
+      data.children.forEach(child => {
+        const opt = document.createElement("option");
+        opt.value = child.id;
+        opt.textContent = child.name;
+        selectChild.appendChild(opt);
+      });
+
+      btnAdd.addEventListener("click", () => {
+        const label = inputLabel.value.trim();
+        const stars = parseInt(inputStars.value, 10) || 1;
+        const childId = selectChild.value;
+
+        if (!label) {
+          alert("Merci de saisir un nom de corvée.");
+          return;
+        }
+
+        // Créer un nouvel id simple à partir du label
+        const newId = label.toLowerCase().replace(/\s+/g, "-");
+
+        // Ajouter la corvée dans la config locale
+        data.chores.push({
+          id: newId,
+          label,
+          stars,
+          assignedTo: [childId]
+        });
+
+        saveData(data);
+        renderAll();
+        renderAdultsSummary();
+
+        inputLabel.value = "";
+        inputStars.value = "1";
+      });
     }
 
     function renderAll() {
@@ -504,6 +611,7 @@
 
       renderAll();
       setupViewButtons();
+      setupAddChoreForm();
       showView("kids");
     }
 
