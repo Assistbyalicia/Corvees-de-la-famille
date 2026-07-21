@@ -28,31 +28,6 @@
       font-size: 0.8rem;
       color: #666;
     }
-    .tabs {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-    .tab-button {
-      flex: 1;
-      padding: 0.6rem;
-      border-radius: 0.35rem;
-      border: 1px solid #ccc;
-      background: #f9f9f9;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-    .tab-button.active {
-      background: #007bff;
-      color: #fff;
-      border-color: #007bff;
-    }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
-    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -66,13 +41,6 @@
     th {
       background: #fafafa;
       font-weight: 600;
-    }
-    .badge {
-      display: inline-block;
-      padding: 0.1rem 0.4rem;
-      border-radius: 999px;
-      background: #ffe58f;
-      font-size: 0.75rem;
     }
     .list {
       list-style: none;
@@ -121,63 +89,41 @@
     <div class="section">
       <h1>Carnet de quêtes – Vue adultes</h1>
       <p class="small">
-        Suivi des enfants et tâches des adultes.
+        Récap des enfants et tâches des adultes.
       </p>
     </div>
 
-    <!-- Onglets -->
-    <div class="tabs">
-      <button class="tab-button active" data-tab="children">Enfants</button>
-      <button class="tab-button" data-tab="adults">Tâches adultes</button>
+    <div class="section">
+      <h2>Enfants – tableau de bord</h2>
+      <table id="children-table">
+        <thead>
+          <tr>
+            <th>Enfant</th>
+            <th>Corvées faites</th>
+            <th>Corvées totales</th>
+            <th>Complétion</th>
+            <th>Étoiles</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
 
-    <!-- Contenu onglet Enfants -->
-    <div id="tab-children" class="tab-content active">
-      <div class="section">
-        <h2>Tableau de bord enfants</h2>
-        <p class="small">
-          Vue synthétique de la progression de chaque enfant.
-        </p>
-        <table id="children-table">
-          <thead>
-            <tr>
-              <th>Enfant</th>
-              <th>Corvées faites</th>
-              <th>Corvées totales</th>
-              <th>Complétion</th>
-              <th>Étoiles</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- lignes générées en JS -->
-          </tbody>
-        </table>
-      </div>
+    <div class="section">
+      <h2>Tâches adultes</h2>
+      <div id="adults-sections"></div>
     </div>
 
-    <!-- Contenu onglet Adultes -->
-    <div id="tab-adults" class="tab-content">
-      <div class="section">
-        <h2>Tâches adultes</h2>
-        <p class="small">
-          Corvées attribuées aux adultes et synthèse de leur progression.
-        </p>
-        <div id="adults-sections">
-          <!-- sections par adulte générées en JS -->
-        </div>
-      </div>
-
-      <div class="section">
-        <h3>Ajouter une corvée</h3>
-        <p class="small">
-          Crée une nouvelle corvée et assigne-la à une personne (enfant ou adulte).
-        </p>
-        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
-          <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
-          <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
-          <select id="new-chore-person" style="padding:0.25rem;"></select>
-          <button id="add-chore-btn">Ajouter</button>
-        </div>
+    <div class="section">
+      <h3>Ajouter une corvée</h3>
+      <p class="small">
+        Crée une nouvelle corvée et assigne-la à une personne (enfant ou adulte).
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+        <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+        <select id="new-chore-person" style="padding:0.25rem;"></select>
+        <button id="add-chore-btn">Ajouter</button>
       </div>
     </div>
   </div>
@@ -230,29 +176,6 @@
       return data.state[personId][dayKey];
     }
 
-    // --- Onglets ---
-    function setupTabs() {
-      const buttons = document.querySelectorAll(".tab-button");
-      const contents = document.querySelectorAll(".tab-content");
-
-      buttons.forEach(btn => {
-        btn.addEventListener("click", () => {
-          const tab = btn.dataset.tab;
-
-          buttons.forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
-
-          contents.forEach(c => {
-            c.classList.remove("active");
-            if (c.id === `tab-${tab}`) {
-              c.classList.add("active");
-            }
-          });
-        });
-      });
-    }
-
-    // --- Tableau enfants ---
     function renderChildrenTable() {
       const tbody = document.querySelector("#children-table tbody");
       if (!tbody) return;
@@ -308,7 +231,6 @@
       }
     }
 
-    // --- Sections adultes ---
     function renderAdultsSections() {
       const container = document.getElementById("adults-sections");
       if (!container) return;
@@ -323,8 +245,8 @@
           if (chore.assignedTo && chore.assignedTo.length > 0) {
             return chore.assignedTo.includes(person.id);
           }
-          // par défaut, les corvées non assignées sont visibles pour les adultes
-          return person.type === "Adulte";
+          // Si pas d'assignation explicite, on considère que c'est visible pour les adultes
+          return true;
         });
 
         const totalChores = choresForPerson.length;
@@ -388,7 +310,6 @@
       }
     }
 
-    // --- Formulaire ajout de corvées ---
     function setupAddChoreForm() {
       const selectPerson = document.getElementById("new-chore-person");
       const btnAdd = document.getElementById("add-chore-btn");
@@ -459,7 +380,6 @@
         };
       }
 
-      setupTabs();
       renderChildrenTable();
       renderAdultsSections();
       setupAddChoreForm();
