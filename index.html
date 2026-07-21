@@ -453,7 +453,7 @@
       return child ? child.name : "";
     }
 
-    // Vue adultes détaillée par enfant + adulte
+    // Vue adultes détaillée par personne (enfants + adultes)
     function renderAdultsSummary() {
       const container = document.getElementById("adults-children-sections");
       if (!container) return;
@@ -467,6 +467,7 @@
       allPeople.forEach(person => {
         const state = getChildDayState(person.id);
 
+        // Corvées explicitement attribuées à cette personne
         const choresForPerson = data.chores.filter(chore => {
           if (!chore.assignedTo || chore.assignedTo.length === 0) return false;
           return chore.assignedTo.includes(person.id);
@@ -509,7 +510,10 @@
 
         if (remaining.length === 0) {
           const li = document.createElement("li");
-          li.textContent = "Aucune corvée restante pour aujourd’hui.";
+          li.textContent =
+            totalChores === 0
+              ? "Aucune corvée attribuée pour aujourd’hui."
+              : "Aucune corvée restante pour aujourd’hui.";
           list.appendChild(li);
         }
 
