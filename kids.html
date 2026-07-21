@@ -5,11 +5,6 @@
   <title>Carnet de quêtes – Vue enfants</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    <div style="margin-bottom: 1rem;">
-  <button onclick="window.location.href='index.html'">
-    ← Retour à l’accueil
-  </button>
-</div>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
@@ -106,6 +101,12 @@
   </style>
 </head>
 <body>
+  <div style="margin-bottom: 1rem;">
+    <button onclick="window.location.href='index.html'">
+      ← Retour à l’accueil
+    </button>
+  </div>
+
   <div class="section">
     <div class="header-row">
       <h1>Carnet de quêtes – Enfants</h1>
@@ -139,13 +140,15 @@
   </div>
 
   <script>
-    const STORAGE_KEY = "corvees-famille-kids-v1";
+    // Clé partagée avec la vue adulte
+    const STORAGE_KEY = "corvees-famille-v1";
 
     const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
     const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
 
     const defaultData = {
       children: [],
+      adults: [],
       chores: [],
       rewards: [],
       activeChildId: null,
@@ -193,7 +196,7 @@
       const container = document.getElementById("children");
       container.innerHTML = "";
 
-      const childrenOnly = data.children.filter(p => p.type === "Enfant" || !p.type);
+      const childrenOnly = data.children || [];
 
       childrenOnly.forEach(child => {
         const btn = document.createElement("button");
@@ -225,7 +228,7 @@
       }
 
       const childState = getChildDayState(data.activeChildId);
-      const choresForChild = data.chores.filter(chore => {
+      const choresForChild = (data.chores || []).filter(chore => {
         if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
         return chore.assignedTo.includes(data.activeChildId);
       });
@@ -263,7 +266,7 @@
 
       const childState = getChildDayState(data.activeChildId);
 
-      const choresForChild = data.chores.filter(chore => {
+      const choresForChild = (data.chores || []).filter(chore => {
         if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
         return chore.assignedTo.includes(data.activeChildId);
       });
@@ -345,7 +348,7 @@
 
       const childState = getChildDayState(data.activeChildId);
 
-      data.rewards.forEach(reward => {
+      (data.rewards || []).forEach(reward => {
         const li = document.createElement("li");
 
         const left = document.createElement("span");
@@ -370,7 +373,7 @@
         list.appendChild(li);
       });
 
-      if (data.rewards.length === 0) {
+      if (!data.rewards || data.rewards.length === 0) {
         const li = document.createElement("li");
         li.textContent = "Aucune récompense configurée.";
         list.appendChild(li);
@@ -378,7 +381,7 @@
     }
 
     function getActiveChildName() {
-      const child = data.children.find(c => c.id === data.activeChildId);
+      const child = (data.children || []).find(c => c.id === data.activeChildId);
       return child ? child.name : "";
     }
 
@@ -404,6 +407,7 @@
           ...defaultData,
           ...local,
           children: config.children || local.children || defaultData.children,
+          adults: config.adults || local.adults || defaultData.adults,
           chores: config.chores || local.chores || defaultData.chores,
           rewards: config.rewards || local.rewards || defaultData.rewards,
           activeChildId:
