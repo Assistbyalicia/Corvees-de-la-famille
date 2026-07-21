@@ -2,664 +2,77 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Carnet de quêtes - Corvées de la famille</title>
+  <title>Carnet de quêtes – Accueil</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
-      padding: 1rem;
+      padding: 2rem 1rem;
       background: #f5f5f5;
+      display: flex;
+      justify-content: center;
     }
-
-    h1, h2, h3 {
-      margin: 0 0 0.5rem;
-    }
-
-    .section {
+    .container {
+      max-width: 480px;
+      width: 100%;
       background: #ffffff;
       border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 1rem;
+      padding: 1.5rem;
       box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     }
-
-    .children {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-      flex-wrap: wrap;
+    h1 {
+      margin: 0 0 0.75rem;
     }
-
-    .child {
-      padding: 0.5rem 0.75rem;
-      border-radius: 999px;
-      border: 1px solid #ddd;
-      cursor: pointer;
+    p {
+      margin: 0 0 1rem;
       font-size: 0.9rem;
-      background: #fafafa;
-    }
-
-    .child.active {
-      background: #007bff;
-      color: #fff;
-      border-color: #007bff;
-    }
-
-    .progress-bar {
-      width: 100%;
-      height: 12px;
-      border-radius: 999px;
-      background: #e0e0e0;
-      margin-top: 0.5rem;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      width: 0%;
-      background: #28a745;
-      transition: width 0.2s ease;
-    }
-
-    .list {
-      list-style: none;
-      padding: 0;
-      margin: 0.5rem 0 0;
-    }
-
-    .list li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.5rem 0;
-      border-bottom: 1px solid #eee;
-      font-size: 0.95rem;
-    }
-
-    .list li:last-child {
-      border-bottom: none;
-    }
-
-    button {
-      padding: 0.25rem 0.5rem;
-      font-size: 0.85rem;
-      border-radius: 0.25rem;
-      border: 1px solid #ccc;
-      background: #f9f9f9;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #f0f0f0;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 0.1rem 0.4rem;
-      border-radius: 999px;
-      background: #ffe58f;
-      font-size: 0.75rem;
-    }
-
-    .header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 0.5rem;
-    }
-
-    .small {
-      font-size: 0.8rem;
       color: #666;
     }
-
-    .view-toggle {
-      margin-top: 0.5rem;
+    .links {
       display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1rem;
     }
-
-    input[type="text"],
-    input[type="number"],
-    select {
-      font-size: 0.85rem;
+    a {
+      display: inline-block;
+      text-decoration: none;
+      text-align: center;
+      padding: 0.6rem 0.75rem;
+      border-radius: 0.35rem;
       border: 1px solid #ccc;
-      border-radius: 0.25rem;
+      background: #f9f9f9;
+      font-size: 0.95rem;
+      color: #333;
+    }
+    a:hover {
+      background: #f0f0f0;
+    }
+    .small {
+      font-size: 0.8rem;
+      color: #999;
+      margin-top: 1rem;
     }
   </style>
 </head>
 <body>
-  <!-- En-tête + menu vues + sélection enfant -->
-  <div class="section">
-    <div class="header-row">
-      <h1>Carnet de quêtes</h1>
-      <span id="total-stars" class="badge">⭐ 0 étoiles</span>
+  <div class="container">
+    <h1>Carnet de quêtes</h1>
+    <p>
+      Choisis la vue adaptée : enfants pour valider les quêtes, adultes pour suivre
+      les corvées et ajouter des tâches.
+    </p>
+
+    <div class="links">
+      <a href="kids.html">Accéder à la vue enfants</a>
+      <a href="adults.html">Accéder à la vue adultes</a>
     </div>
+
     <p class="small">
-      Vue enfants pour les quêtes, vue adultes pour le suivi. Configuration via N8N, état du jour en local.
+      Les données sont synchronisées via N8N et Notion. Les vues partagent la même
+      configuration (personnes, corvées, récompenses).
     </p>
-    <div class="view-toggle">
-      <button id="view-kids-btn">Vue enfants</button>
-      <button id="view-adults-btn">Vue adultes</button>
-    </div>
-    <p class="small" style="margin-top:0.5rem;">
-      Enfant actif :
-    </p>
-    <div class="children" id="children"></div>
   </div>
-
-  <!-- Vue ENFANTS -->
-  <div id="view-kids">
-    <div class="section">
-      <h2>Progression du jour</h2>
-      <p id="progress-text">0 / 0 corvées complétées</p>
-      <div class="progress-bar">
-        <div class="progress-fill" id="progress-fill"></div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>Quêtes du jour</h2>
-      <ul class="list" id="chores-list"></ul>
-    </div>
-
-    <div class="section">
-      <h2>Boutique de récompenses</h2>
-      <ul class="list" id="rewards-list"></ul>
-    </div>
-  </div>
-
-  <!-- Vue ADULTES -->
-  <div id="view-adults" style="display:none;">
-    <div class="section">
-      <h2>Vue adultes</h2>
-      <p class="small">
-        Résumé des corvées, étoiles et progression par personne pour la journée actuelle.
-      </p>
-    </div>
-
-    <!-- Sections enfants + adultes -->
-    <div id="adults-children-sections"></div>
-
-    <!-- Formulaire d'ajout de corvée -->
-    <div class="section">
-      <h2>Ajouter une corvée</h2>
-      <p class="small">
-        Crée une nouvelle corvée et assigne-la à une personne.
-      </p>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
-        <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
-        <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
-        <select id="new-chore-person" style="padding:0.25rem;">
-          <!-- options remplies en JS -->
-        </select>
-        <button id="add-chore-btn">Ajouter</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const STORAGE_KEY = "corvees-famille-v1";
-
-    // URL de config (workflow 1)
-    const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
-
-    // URL de journalisation (workflow 2)
-    const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
-
-    // Fallback minimal si la config N8N est indisponible
-    const defaultData = {
-      children: [],
-      adults: [],
-      chores: [],
-      rewards: [],
-      activeChildId: null,
-      state: {}
-    };
-
-    function loadData() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { ...defaultData };
-      try {
-        const parsed = JSON.parse(raw);
-        return { ...defaultData, ...parsed };
-      } catch (e) {
-        console.error("Erreur de parsing localStorage", e);
-        return { ...defaultData };
-      }
-    }
-
-    function saveData(data) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-
-    let data = null;
-
-    function getTodayKey() {
-      const d = new Date();
-      return d.toISOString().slice(0, 10); // AAAA-MM-JJ
-    }
-
-    function getChildDayState(personId) {
-      const dayKey = getTodayKey();
-      if (!data.state[personId]) {
-        data.state[personId] = {};
-      }
-      if (!data.state[personId][dayKey]) {
-        data.state[personId][dayKey] = {
-          completedChores: [],
-          stars: 0
-        };
-      }
-      return data.state[personId][dayKey];
-    }
-
-    function renderChildren() {
-      const container = document.getElementById("children");
-      container.innerHTML = "";
-
-      // Vue enfants : ne montrer que les personnes de type "Enfant"
-      const childrenOnly = data.children.filter(p => p.type === "Enfant" || !p.type);
-
-      childrenOnly.forEach(child => {
-        const btn = document.createElement("button");
-        btn.className = "child" + (child.id === data.activeChildId ? " active" : "");
-        btn.textContent = child.name;
-        btn.addEventListener("click", () => {
-          data.activeChildId = child.id;
-          saveData(data);
-          renderAll();
-        });
-        container.appendChild(btn);
-      });
-
-      if (childrenOnly.length === 0) {
-        const span = document.createElement("span");
-        span.textContent = "Aucun enfant configuré.";
-        container.appendChild(span);
-      }
-    }
-
-    function renderProgress() {
-      const progressText = document.getElementById("progress-text");
-      const progressFill = document.getElementById("progress-fill");
-
-      if (!data.activeChildId) {
-        progressText.textContent = "Aucun enfant actif";
-        progressFill.style.width = "0%";
-        return;
-      }
-
-      const childState = getChildDayState(data.activeChildId);
-      const choresForChild = data.chores.filter(chore => {
-        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-        return chore.assignedTo.includes(data.activeChildId);
-      });
-
-      const total = choresForChild.length;
-      const completed = childState.completedChores.filter(id =>
-        choresForChild.some(chore => chore.id === id)
-      ).length;
-      const ratio = total === 0 ? 0 : (completed / total) * 100;
-
-      progressText.textContent = `${completed} / ${total} corvées complétées`;
-      progressFill.style.width = `${ratio}%`;
-    }
-
-    function renderTotalStars() {
-      const badge = document.getElementById("total-stars");
-      if (!data.activeChildId) {
-        badge.textContent = "⭐ 0 étoiles";
-        return;
-      }
-      const childState = getChildDayState(data.activeChildId);
-      badge.textContent = `⭐ ${childState.stars} étoiles`;
-    }
-
-    function renderChores() {
-      const list = document.getElementById("chores-list");
-      list.innerHTML = "";
-
-      if (!data.activeChildId) {
-        const li = document.createElement("li");
-        li.textContent = "Aucun enfant actif.";
-        list.appendChild(li);
-        return;
-      }
-
-      const childState = getChildDayState(data.activeChildId);
-
-      const choresForChild = data.chores.filter(chore => {
-        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-        return chore.assignedTo.includes(data.activeChildId);
-      });
-
-      choresForChild.forEach(chore => {
-        const li = document.createElement("li");
-
-        const left = document.createElement("span");
-        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
-
-        const right = document.createElement("div");
-
-        const completed = childState.completedChores.includes(chore.id);
-
-        const status = document.createElement("span");
-        status.className = "badge";
-        status.textContent = completed ? "Déjà fait" : "À faire";
-
-        const btn = document.createElement("button");
-        btn.textContent = completed ? "Annuler" : "Valider";
-
-        btn.addEventListener("click", async () => {
-          const state = getChildDayState(data.activeChildId);
-          const index = state.completedChores.indexOf(chore.id);
-          const isNowCompleted = index === -1;
-
-          if (isNowCompleted) {
-            // La corvée passe de non faite à faite
-            state.completedChores.push(chore.id);
-            state.stars += chore.stars;
-
-            // Journalisation vers N8N / Notion
-            try {
-              await fetch(API_COMPLETE_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  personId: data.activeChildId,
-                  choreId: chore.id,
-                  date: new Date().toISOString().slice(0, 10)
-                })
-              });
-            } catch (e) {
-              console.warn("Impossible de journaliser la corvée dans Notion :", e);
-            }
-          } else {
-            // Annulation de la corvée (pas de journalisation pour l'instant)
-            state.completedChores.splice(index, 1);
-            state.stars -= chore.stars;
-            if (state.stars < 0) state.stars = 0;
-          }
-
-          saveData(data);
-          renderAll();
-        });
-
-        right.appendChild(status);
-        right.appendChild(btn);
-
-        li.appendChild(left);
-        li.appendChild(right);
-        list.appendChild(li);
-      });
-
-      if (choresForChild.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
-        list.appendChild(li);
-      }
-    }
-
-    function renderRewards() {
-      const list = document.getElementById("rewards-list");
-      list.innerHTML = "";
-
-      if (!data.activeChildId) {
-        const li = document.createElement("li");
-        li.textContent = "Aucun enfant actif.";
-        list.appendChild(li);
-        return;
-      }
-
-      const childState = getChildDayState(data.activeChildId);
-
-      data.rewards.forEach(reward => {
-        const li = document.createElement("li");
-
-        const left = document.createElement("span");
-        left.textContent = `${reward.label} (${reward.cost}⭐)`;
-
-        const btn = document.createElement("button");
-        btn.textContent = "Acheter";
-        btn.disabled = childState.stars < reward.cost;
-
-        btn.addEventListener("click", () => {
-          const state = getChildDayState(data.activeChildId);
-          if (state.stars >= reward.cost) {
-            state.stars -= reward.cost;
-            saveData(data);
-            renderAll();
-            alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
-          }
-        });
-
-        li.appendChild(left);
-        li.appendChild(btn);
-        list.appendChild(li);
-      });
-
-      if (data.rewards.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "Aucune récompense configurée.";
-        list.appendChild(li);
-      }
-    }
-
-    function getActiveChildName() {
-      const child = data.children.find(c => c.id === data.activeChildId);
-      return child ? child.name : "";
-    }
-
-    // Vue adultes détaillée par personne (enfants + adultes)
-    function renderAdultsSummary() {
-      const container = document.getElementById("adults-children-sections");
-      if (!container) return;
-      container.innerHTML = "";
-
-      const allPeople = [
-        ...data.children,
-        ...data.adults
-      ];
-
-      allPeople.forEach(person => {
-        const state = getChildDayState(person.id);
-
-        // Corvées explicitement attribuées à cette personne
-        const choresForPerson = data.chores.filter(chore => {
-          if (!chore.assignedTo || chore.assignedTo.length === 0) return false;
-          return chore.assignedTo.includes(person.id);
-        });
-
-        const totalChores = choresForPerson.length;
-        const completedCount = state.completedChores.filter(id =>
-          choresForPerson.some(chore => chore.id === id)
-        ).length;
-
-        const remaining = choresForPerson.filter(chore =>
-          !state.completedChores.includes(chore.id)
-        );
-
-        const completionRatio =
-          totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
-
-        const section = document.createElement("div");
-        section.className = "section";
-
-        const title = document.createElement("h3");
-        title.textContent = person.name;
-
-        const summary = document.createElement("p");
-        summary.className = "small";
-        summary.textContent =
-          `${completedCount}/${totalChores} corvées faites ` +
-          `(${completionRatio}%), ${state.stars}⭐.`;
-
-        const list = document.createElement("ul");
-        list.className = "list";
-
-        remaining.forEach(chore => {
-          const li = document.createElement("li");
-          const left = document.createElement("span");
-          left.textContent = `${chore.label} (+${chore.stars}⭐)`;
-          li.appendChild(left);
-          list.appendChild(li);
-        });
-
-        if (remaining.length === 0) {
-          const li = document.createElement("li");
-          li.textContent =
-            totalChores === 0
-              ? "Aucune corvée attribuée pour aujourd’hui."
-              : "Aucune corvée restante pour aujourd’hui.";
-          list.appendChild(li);
-        }
-
-        section.appendChild(title);
-        section.appendChild(summary);
-        section.appendChild(list);
-        container.appendChild(section);
-      });
-
-      if (allPeople.length === 0) {
-        const section = document.createElement("div");
-        section.className = "section";
-        section.textContent = "Aucune personne configurée.";
-        container.appendChild(section);
-      }
-    }
-
-    function showView(view) {
-      const kids = document.getElementById("view-kids");
-      const adults = document.getElementById("view-adults");
-
-      if (view === "kids") {
-        kids.style.display = "block";
-        adults.style.display = "none";
-      } else {
-        kids.style.display = "none";
-        adults.style.display = "block";
-        renderAdultsSummary();
-      }
-    }
-
-    function setupViewButtons() {
-      const btnKids = document.getElementById("view-kids-btn");
-      const btnAdults = document.getElementById("view-adults-btn");
-
-      if (btnKids) {
-        btnKids.addEventListener("click", () => {
-          showView("kids");
-        });
-      }
-
-      if (btnAdults) {
-        btnAdults.addEventListener("click", () => {
-          showView("adults");
-        });
-      }
-    }
-
-    // Formulaire d'ajout de corvée côté adultes
-    function setupAddChoreForm() {
-      const selectPerson = document.getElementById("new-chore-person");
-      const btnAdd = document.getElementById("add-chore-btn");
-      const inputLabel = document.getElementById("new-chore-label");
-      const inputStars = document.getElementById("new-chore-stars");
-
-      if (!selectPerson || !btnAdd || !inputLabel || !inputStars) return;
-
-      // Remplir les options avec tous les enfants + adultes
-      selectPerson.innerHTML = "";
-      const allPeople = [...data.children, ...data.adults];
-      allPeople.forEach(person => {
-        const opt = document.createElement("option");
-        opt.value = person.id;
-        opt.textContent = person.name;
-        selectPerson.appendChild(opt);
-      });
-
-      btnAdd.addEventListener("click", () => {
-        const label = inputLabel.value.trim();
-        const stars = parseInt(inputStars.value, 10) || 1;
-        const personId = selectPerson.value;
-
-        if (!label) {
-          alert("Merci de saisir un nom de corvée.");
-          return;
-        }
-
-        // Créer un nouvel id simple à partir du label
-        const newId = label.toLowerCase().replace(/\s+/g, "-");
-
-        // Ajouter la corvée dans la config locale
-        data.chores.push({
-          id: newId,
-          label,
-          stars,
-          assignedTo: [personId]
-        });
-
-        saveData(data);
-        renderAll();
-        renderAdultsSummary();
-
-        inputLabel.value = "";
-        inputStars.value = "1";
-      });
-    }
-
-    function renderAll() {
-      renderChildren();
-      renderProgress();
-      renderTotalStars();
-      renderChores();
-      renderRewards();
-    }
-
-    async function initApp() {
-      const local = loadData();
-
-      try {
-        const res = await fetch(API_CONFIG_URL);
-        if (!res.ok) throw new Error("API config non disponible");
-
-        const payload = await res.json();
-        const config = Array.isArray(payload) ? payload[0] : payload;
-
-        data = {
-          ...defaultData,
-          ...local,
-          children: config.children || local.children || defaultData.children,
-          adults: config.adults || local.adults || defaultData.adults,
-          chores: config.chores || local.chores || defaultData.chores,
-          rewards: config.rewards || local.rewards || defaultData.rewards,
-          activeChildId:
-            local.activeChildId ||
-            (config.children && config.children.length > 0 ? config.children[0].id : null)
-        };
-      } catch (e) {
-        console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
-        data = {
-          ...defaultData,
-          ...local
-        };
-      }
-
-      // Si aucun enfant actif n'est défini, prendre le premier enfant si possible
-      if (!data.activeChildId && data.children && data.children.length > 0) {
-        data.activeChildId = data.children[0].id;
-      }
-
-      renderAll();
-      setupViewButtons();
-      setupAddChoreForm();
-      showView("kids");
-    }
-
-    initApp();
-  </script>
 </body>
 </html>
