@@ -10,9 +10,12 @@
       margin: 0;
       padding: 1rem;
       background: #f5f5f5;
+      display: flex;
+      justify-content: center;
     }
-    h1, h2, h3 {
-      margin: 0 0 0.5rem;
+    .container {
+      max-width: 800px;
+      width: 100%;
     }
     .section {
       background: #ffffff;
@@ -24,6 +27,52 @@
     .small {
       font-size: 0.8rem;
       color: #666;
+    }
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .tab-button {
+      flex: 1;
+      padding: 0.6rem;
+      border-radius: 0.35rem;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .tab-button.active {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border-bottom: 1px solid #eee;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    th {
+      background: #fafafa;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      background: #ffe58f;
+      font-size: 0.75rem;
     }
     .list {
       list-style: none;
@@ -62,32 +111,79 @@
   </style>
 </head>
 <body>
-  <div class="section">
-    <h1>Carnet de quêtes – Vue adultes</h1>
-    <p class="small">
-      Résumé des corvées et des étoiles par personne (enfants + adultes).
-    </p>
-  </div>
+  <div class="container">
+    <div style="margin-bottom: 1rem;">
+      <button onclick="window.location.href='index.html'">
+        ← Retour à l’accueil
+      </button>
+    </div>
 
-  <div id="people-sections"></div>
+    <div class="section">
+      <h1>Carnet de quêtes – Vue adultes</h1>
+      <p class="small">
+        Suivi des enfants et tâches des adultes.
+      </p>
+    </div>
 
-  <div class="section">
-    <h2>Ajouter une corvée</h2>
-    <p class="small">
-      Crée une nouvelle corvée et assigne-la à une personne.
-    </p>
-    <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
-      <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
-      <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
-      <select id="new-chore-person" style="padding:0.25rem;"></select>
-      <button id="add-chore-btn">Ajouter</button>
+    <!-- Onglets -->
+    <div class="tabs">
+      <button class="tab-button active" data-tab="children">Enfants</button>
+      <button class="tab-button" data-tab="adults">Tâches adultes</button>
+    </div>
+
+    <!-- Contenu onglet Enfants -->
+    <div id="tab-children" class="tab-content active">
+      <div class="section">
+        <h2>Tableau de bord enfants</h2>
+        <p class="small">
+          Vue synthétique de la progression de chaque enfant.
+        </p>
+        <table id="children-table">
+          <thead>
+            <tr>
+              <th>Enfant</th>
+              <th>Corvées faites</th>
+              <th>Corvées totales</th>
+              <th>Complétion</th>
+              <th>Étoiles</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- lignes générées en JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contenu onglet Adultes -->
+    <div id="tab-adults" class="tab-content">
+      <div class="section">
+        <h2>Tâches adultes</h2>
+        <p class="small">
+          Corvées attribuées aux adultes et synthèse de leur progression.
+        </p>
+        <div id="adults-sections">
+          <!-- sections par adulte générées en JS -->
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Ajouter une corvée</h3>
+        <p class="small">
+          Crée une nouvelle corvée et assigne-la à une personne (enfant ou adulte).
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+          <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+          <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+          <select id="new-chore-person" style="padding:0.25rem;"></select>
+          <button id="add-chore-btn">Ajouter</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     const STORAGE_KEY = "corvees-famille-adults-v1";
-
-    // URL de config adultes : tu peux utiliser le même webhook que pour les enfants
     const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
 
     const defaultData = {
@@ -134,23 +230,100 @@
       return data.state[personId][dayKey];
     }
 
-    function renderPeopleSections() {
-      const container = document.getElementById("people-sections");
+    // --- Onglets ---
+    function setupTabs() {
+      const buttons = document.querySelectorAll(".tab-button");
+      const contents = document.querySelectorAll(".tab-content");
+
+      buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const tab = btn.dataset.tab;
+
+          buttons.forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+
+          contents.forEach(c => {
+            c.classList.remove("active");
+            if (c.id === `tab-${tab}`) {
+              c.classList.add("active");
+            }
+          });
+        });
+      });
+    }
+
+    // --- Tableau enfants ---
+    function renderChildrenTable() {
+      const tbody = document.querySelector("#children-table tbody");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      (data.children || []).forEach(child => {
+        const state = getPersonDayState(child.id);
+
+        const choresForChild = (data.chores || []).filter(chore => {
+          if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+          return chore.assignedTo.includes(child.id);
+        });
+
+        const total = choresForChild.length;
+        const completed = state.completedChores.filter(id =>
+          choresForChild.some(chore => chore.id === id)
+        ).length;
+        const ratio = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+        const tr = document.createElement("tr");
+
+        const tdName = document.createElement("td");
+        tdName.textContent = child.name;
+
+        const tdDone = document.createElement("td");
+        tdDone.textContent = completed;
+
+        const tdTotal = document.createElement("td");
+        tdTotal.textContent = total;
+
+        const tdRatio = document.createElement("td");
+        tdRatio.textContent = `${ratio}%`;
+
+        const tdStars = document.createElement("td");
+        tdStars.textContent = `${state.stars}⭐`;
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdDone);
+        tr.appendChild(tdTotal);
+        tr.appendChild(tdRatio);
+        tr.appendChild(tdStars);
+
+        tbody.appendChild(tr);
+      });
+
+      if (!data.children || data.children.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.textContent = "Aucun enfant configuré.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    // --- Sections adultes ---
+    function renderAdultsSections() {
+      const container = document.getElementById("adults-sections");
       if (!container) return;
       container.innerHTML = "";
 
-      const allPeople = [
-        ...data.children,
-        ...data.adults
-      ];
+      const adults = data.adults || [];
 
-      allPeople.forEach(person => {
+      adults.forEach(person => {
         const state = getPersonDayState(person.id);
 
-        const choresForPerson = data.chores.filter(chore => {
+        const choresForPerson = (data.chores || []).filter(chore => {
           if (chore.assignedTo && chore.assignedTo.length > 0) {
             return chore.assignedTo.includes(person.id);
           }
+          // par défaut, les corvées non assignées sont visibles pour les adultes
           return person.type === "Adulte";
         });
 
@@ -207,14 +380,15 @@
         container.appendChild(section);
       });
 
-      if (allPeople.length === 0) {
+      if (adults.length === 0) {
         const section = document.createElement("div");
         section.className = "section";
-        section.textContent = "Aucune personne configurée.";
+        section.textContent = "Aucun adulte configuré.";
         container.appendChild(section);
       }
     }
 
+    // --- Formulaire ajout de corvées ---
     function setupAddChoreForm() {
       const selectPerson = document.getElementById("new-chore-person");
       const btnAdd = document.getElementById("add-chore-btn");
@@ -224,7 +398,7 @@
       if (!selectPerson || !btnAdd || !inputLabel || !inputStars) return;
 
       selectPerson.innerHTML = "";
-      const allPeople = [...data.children, ...data.adults];
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
       allPeople.forEach(person => {
         const opt = document.createElement("option");
         opt.value = person.id;
@@ -242,9 +416,9 @@
           return;
         }
 
-        const newId = label.toLowerCase().replace(/\s+/g, "-");
+        const newId = `${personId}-${label.toLowerCase().replace(/\s+/g, "-")}`;
 
-        data.chores.push({
+        (data.chores || (data.chores = [])).push({
           id: newId,
           label,
           stars,
@@ -252,7 +426,8 @@
         });
 
         saveData(data);
-        renderPeopleSections();
+        renderChildrenTable();
+        renderAdultsSections();
 
         inputLabel.value = "";
         inputStars.value = "1";
@@ -284,7 +459,9 @@
         };
       }
 
-      renderPeopleSections();
+      setupTabs();
+      renderChildrenTable();
+      renderAdultsSections();
       setupAddChoreForm();
     }
 
