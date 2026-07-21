@@ -392,6 +392,37 @@
       renderChores();
       renderRewards();
     }
+    // TEMPORAIRE : ignorer N8N et mettre des données en dur
+data = {
+  children: [
+    { id: "enfant-1", name: "Enfant 1" },
+    { id: "enfant-2", name: "Enfant 2" }
+  ],
+  adults: [
+    { id: "maman", name: "Maman" }
+  ],
+  chores: [
+    { id: "chore-1", label: "Ranger la chambre", stars: 2, assignedTo: ["enfant-1"] },
+    { id: "chore-2", label: "Mettre la table", stars: 1, assignedTo: ["enfant-1", "enfant-2"] }
+  ],
+  rewards: [
+    { id: "reward-1", label: "Dessiner", cost: 3 }
+  ],
+  activeChildId: "enfant-1",
+  state: {}
+};
+
+// Et commente complètement initApp pour le moment :
+/*
+async function initApp() {
+  const local = loadData();
+  ...
+  initApp();
+}
+*/
+
+// À la place, appelle juste :
+renderAll();
 
     async function initApp() {
       const local = loadData();
