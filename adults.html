@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Carnet de quêtes – Vue adultes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f5f5f5;
+    }
+    h1, h2, h3 {
+      margin: 0 0 0.5rem;
+    }
+    .section {
+      background: #ffffff;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .small {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    .list {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+    }
+    .list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
+    }
+    .list li:last-child {
+      border-bottom: none;
+    }
+    button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.85rem;
+      border-radius: 0.25rem;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #f0f0f0;
+    }
+    input[type="text"],
+    input[type="number"],
+    select {
+      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      border-radius: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <h1>Carnet de quêtes – Vue adultes</h1>
+    <p class="small">
+      Résumé des corvées et des étoiles par personne (enfants + adultes).
+    </p>
+  </div>
+
+  <div id="people-sections"></div>
+
+  <div class="section">
+    <h2>Ajouter une corvée</h2>
+    <p class="small">
+      Crée une nouvelle corvée et assigne-la à une personne.
+    </p>
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+      <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+      <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+      <select id="new-chore-person" style="padding:0.25rem;"></select>
+      <button id="add-chore-btn">Ajouter</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "corvees-famille-adults-v1";
+
+    // URL de config adultes : tu peux utiliser le même webhook que pour les enfants
+    const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
+
+    const defaultData = {
+      children: [],
+      adults: [],
+      chores: [],
+      state: {}
+    };
+
+    function loadData() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return { ...defaultData };
+      try {
+        const parsed = JSON.parse(raw);
+        return { ...defaultData, ...parsed };
+      } catch (e) {
+        console.error("Erreur de parsing localStorage", e);
+        return { ...defaultData };
+      }
+    }
+
+    function saveData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    let data = null;
+
+    function getTodayKey() {
+      const d = new Date();
+      return d.toISOString().slice(0, 10);
+    }
+
+    function getPersonDayState(personId) {
+      const dayKey = getTodayKey();
+      if (!data.state[personId]) {
+        data.state[personId] = {};
+      }
+      if (!data.state[personId][dayKey]) {
+        data.state[personId][dayKey] = {
+          completedChores: [],
+          stars: 0
+        };
+      }
+      return data.state[personId][dayKey];
+    }
+
+    function renderPeopleSections() {
+      const container = document.getElementById("people-sections");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const allPeople = [
+        ...data.children,
+        ...data.adults
+      ];
+
+      allPeople.forEach(person => {
+        const state = getPersonDayState(person.id);
+
+        const choresForPerson = data.chores.filter(chore => {
+          if (chore.assignedTo && chore.assignedTo.length > 0) {
+            return chore.assignedTo.includes(person.id);
+          }
+          return person.type === "Adulte";
+        });
+
+        const totalChores = choresForPerson.length;
+        const completedCount = state.completedChores.filter(id =>
+          choresForPerson.some(chore => chore.id === id)
+        ).length;
+
+        const remaining = choresForPerson.filter(chore =>
+          !state.completedChores.includes(chore.id)
+        );
+
+        const completionRatio =
+          totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
+
+        const section = document.createElement("div");
+        section.className = "section";
+
+        const title = document.createElement("h3");
+        title.textContent = person.name;
+
+        const summary = document.createElement("p");
+        summary.className = "small";
+        summary.textContent =
+          `${completedCount}/${totalChores} corvées faites ` +
+          `(${completionRatio}%), ${state.stars}⭐.`;
+
+        const list = document.createElement("ul");
+        list.className = "list";
+
+        remaining.forEach(chore => {
+          const li = document.createElement("li");
+          const left = document.createElement("span");
+          left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+          const right = document.createElement("span");
+          right.textContent = "À faire";
+          li.appendChild(left);
+          li.appendChild(right);
+          list.appendChild(li);
+        });
+
+        if (remaining.length === 0) {
+          const li = document.createElement("li");
+          li.textContent =
+            totalChores === 0
+              ? "Aucune corvée attribuée pour aujourd’hui."
+              : "Aucune corvée restante pour aujourd’hui.";
+          list.appendChild(li);
+        }
+
+        section.appendChild(title);
+        section.appendChild(summary);
+        section.appendChild(list);
+        container.appendChild(section);
+      });
+
+      if (allPeople.length === 0) {
+        const section = document.createElement("div");
+        section.className = "section";
+        section.textContent = "Aucune personne configurée.";
+        container.appendChild(section);
+      }
+    }
+
+    function setupAddChoreForm() {
+      const selectPerson = document.getElementById("new-chore-person");
+      const btnAdd = document.getElementById("add-chore-btn");
+      const inputLabel = document.getElementById("new-chore-label");
+      const inputStars = document.getElementById("new-chore-stars");
+
+      if (!selectPerson || !btnAdd || !inputLabel || !inputStars) return;
+
+      selectPerson.innerHTML = "";
+      const allPeople = [...data.children, ...data.adults];
+      allPeople.forEach(person => {
+        const opt = document.createElement("option");
+        opt.value = person.id;
+        opt.textContent = person.name;
+        selectPerson.appendChild(opt);
+      });
+
+      btnAdd.addEventListener("click", () => {
+        const label = inputLabel.value.trim();
+        const stars = parseInt(inputStars.value, 10) || 1;
+        const personId = selectPerson.value;
+
+        if (!label) {
+          alert("Merci de saisir un nom de corvée.");
+          return;
+        }
+
+        const newId = label.toLowerCase().replace(/\s+/g, "-");
+
+        data.chores.push({
+          id: newId,
+          label,
+          stars,
+          assignedTo: [personId]
+        });
+
+        saveData(data);
+        renderPeopleSections();
+
+        inputLabel.value = "";
+        inputStars.value = "1";
+      });
+    }
+
+    async function initApp() {
+      const local = loadData();
+
+      try {
+        const res = await fetch(API_CONFIG_URL);
+        if (!res.ok) throw new Error("API config non disponible");
+
+        const payload = await res.json();
+        const config = Array.isArray(payload) ? payload[0] : payload;
+
+        data = {
+          ...defaultData,
+          ...local,
+          children: config.children || local.children || defaultData.children,
+          adults: config.adults || local.adults || defaultData.adults,
+          chores: config.chores || local.chores || defaultData.chores
+        };
+      } catch (e) {
+        console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
+        data = {
+          ...defaultData,
+          ...local
+        };
+      }
+
+      renderPeopleSections();
+      setupAddChoreForm();
+    }
+
+    initApp();
+  </script>
+</body>
+</html>

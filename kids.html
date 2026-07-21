@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Carnet de quêtes – Vue enfants</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f5f5f5;
+    }
+    h1, h2 {
+      margin: 0 0 0.5rem;
+    }
+    .section {
+      background: #ffffff;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .children {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .child {
+      padding: 0.5rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: #fafafa;
+    }
+    .child.active {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: #e0e0e0;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #28a745;
+      transition: width 0.2s ease;
+    }
+    .list {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+    }
+    .list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
+    }
+    .list li:last-child {
+      border-bottom: none;
+    }
+    button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.85rem;
+      border-radius: 0.25rem;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #f0f0f0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      background: #ffe58f;
+      font-size: 0.75rem;
+    }
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .small {
+      font-size: 0.8rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <div class="header-row">
+      <h1>Carnet de quêtes – Enfants</h1>
+      <span id="total-stars" class="badge">⭐ 0 étoiles</span>
+    </div>
+    <p class="small">
+      Choisis ton enfant, valide les corvées, débloque des récompenses.
+    </p>
+    <p class="small" style="margin-top:0.5rem;">
+      Enfant actif :
+    </p>
+    <div class="children" id="children"></div>
+  </div>
+
+  <div class="section">
+    <h2>Progression du jour</h2>
+    <p id="progress-text">0 / 0 corvées complétées</p>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Quêtes du jour</h2>
+    <ul class="list" id="chores-list"></ul>
+  </div>
+
+  <div class="section">
+    <h2>Boutique de récompenses</h2>
+    <ul class="list" id="rewards-list"></ul>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "corvees-famille-kids-v1";
+
+    const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
+    const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
+
+    const defaultData = {
+      children: [],
+      chores: [],
+      rewards: [],
+      activeChildId: null,
+      state: {}
+    };
+
+    function loadData() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return { ...defaultData };
+      try {
+        const parsed = JSON.parse(raw);
+        return { ...defaultData, ...parsed };
+      } catch (e) {
+        console.error("Erreur de parsing localStorage", e);
+        return { ...defaultData };
+      }
+    }
+
+    function saveData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    let data = null;
+
+    function getTodayKey() {
+      const d = new Date();
+      return d.toISOString().slice(0, 10);
+    }
+
+    function getChildDayState(childId) {
+      const dayKey = getTodayKey();
+      if (!data.state[childId]) {
+        data.state[childId] = {};
+      }
+      if (!data.state[childId][dayKey]) {
+        data.state[childId][dayKey] = {
+          completedChores: [],
+          stars: 0
+        };
+      }
+      return data.state[childId][dayKey];
+    }
+
+    function renderChildren() {
+      const container = document.getElementById("children");
+      container.innerHTML = "";
+
+      const childrenOnly = data.children.filter(p => p.type === "Enfant" || !p.type);
+
+      childrenOnly.forEach(child => {
+        const btn = document.createElement("button");
+        btn.className = "child" + (child.id === data.activeChildId ? " active" : "");
+        btn.textContent = child.name;
+        btn.addEventListener("click", () => {
+          data.activeChildId = child.id;
+          saveData(data);
+          renderAll();
+        });
+        container.appendChild(btn);
+      });
+
+      if (childrenOnly.length === 0) {
+        const span = document.createElement("span");
+        span.textContent = "Aucun enfant configuré.";
+        container.appendChild(span);
+      }
+    }
+
+    function renderProgress() {
+      const progressText = document.getElementById("progress-text");
+      const progressFill = document.getElementById("progress-fill");
+
+      if (!data.activeChildId) {
+        progressText.textContent = "Aucun enfant actif";
+        progressFill.style.width = "0%";
+        return;
+      }
+
+      const childState = getChildDayState(data.activeChildId);
+      const choresForChild = data.chores.filter(chore => {
+        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+        return chore.assignedTo.includes(data.activeChildId);
+      });
+
+      const total = choresForChild.length;
+      const completed = childState.completedChores.filter(id =>
+        choresForChild.some(chore => chore.id === id)
+      ).length;
+      const ratio = total === 0 ? 0 : (completed / total) * 100;
+
+      progressText.textContent = `${completed} / ${total} corvées complétées`;
+      progressFill.style.width = `${ratio}%`;
+    }
+
+    function renderTotalStars() {
+      const badge = document.getElementById("total-stars");
+      if (!data.activeChildId) {
+        badge.textContent = "⭐ 0 étoiles";
+        return;
+      }
+      const childState = getChildDayState(data.activeChildId);
+      badge.textContent = `⭐ ${childState.stars} étoiles`;
+    }
+
+    function renderChores() {
+      const list = document.getElementById("chores-list");
+      list.innerHTML = "";
+
+      if (!data.activeChildId) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun enfant actif.";
+        list.appendChild(li);
+        return;
+      }
+
+      const childState = getChildDayState(data.activeChildId);
+
+      const choresForChild = data.chores.filter(chore => {
+        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+        return chore.assignedTo.includes(data.activeChildId);
+      });
+
+      choresForChild.forEach(chore => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+
+        const right = document.createElement("div");
+
+        const completed = childState.completedChores.includes(chore.id);
+
+        const status = document.createElement("span");
+        status.className = "badge";
+        status.textContent = completed ? "Déjà fait" : "À faire";
+
+        const btn = document.createElement("button");
+        btn.textContent = completed ? "Annuler" : "Valider";
+
+        btn.addEventListener("click", async () => {
+          const state = getChildDayState(data.activeChildId);
+          const index = state.completedChores.indexOf(chore.id);
+          const isNowCompleted = index === -1;
+
+          if (isNowCompleted) {
+            state.completedChores.push(chore.id);
+            state.stars += chore.stars;
+
+            try {
+              await fetch(API_COMPLETE_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  personId: data.activeChildId,
+                  choreId: chore.id,
+                  date: new Date().toISOString().slice(0, 10)
+                })
+              });
+            } catch (e) {
+              console.warn("Impossible de journaliser la corvée dans Notion :", e);
+            }
+          } else {
+            state.completedChores.splice(index, 1);
+            state.stars -= chore.stars;
+            if (state.stars < 0) state.stars = 0;
+          }
+
+          saveData(data);
+          renderAll();
+        });
+
+        right.appendChild(status);
+        right.appendChild(btn);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        list.appendChild(li);
+      });
+
+      if (choresForChild.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
+        list.appendChild(li);
+      }
+    }
+
+    function renderRewards() {
+      const list = document.getElementById("rewards-list");
+      list.innerHTML = "";
+
+      if (!data.activeChildId) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun enfant actif.";
+        list.appendChild(li);
+        return;
+      }
+
+      const childState = getChildDayState(data.activeChildId);
+
+      data.rewards.forEach(reward => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${reward.label} (${reward.cost}⭐)`;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Acheter";
+        btn.disabled = childState.stars < reward.cost;
+
+        btn.addEventListener("click", () => {
+          const state = getChildDayState(data.activeChildId);
+          if (state.stars >= reward.cost) {
+            state.stars -= reward.cost;
+            saveData(data);
+            renderAll();
+            alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
+          }
+        });
+
+        li.appendChild(left);
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+
+      if (data.rewards.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune récompense configurée.";
+        list.appendChild(li);
+      }
+    }
+
+    function getActiveChildName() {
+      const child = data.children.find(c => c.id === data.activeChildId);
+      return child ? child.name : "";
+    }
+
+    function renderAll() {
+      renderChildren();
+      renderProgress();
+      renderTotalStars();
+      renderChores();
+      renderRewards();
+    }
+
+    async function initApp() {
+      const local = loadData();
+
+      try {
+        const res = await fetch(API_CONFIG_URL);
+        if (!res.ok) throw new Error("API config non disponible");
+
+        const payload = await res.json();
+        const config = Array.isArray(payload) ? payload[0] : payload;
+
+        data = {
+          ...defaultData,
+          ...local,
+          children: config.children || local.children || defaultData.children,
+          chores: config.chores || local.chores || defaultData.chores,
+          rewards: config.rewards || local.rewards || defaultData.rewards,
+          activeChildId:
+            local.activeChildId ||
+            (config.children && config.children.length > 0 ? config.children[0].id : null)
+        };
+      } catch (e) {
+        console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
+        data = {
+          ...defaultData,
+          ...local
+        };
+      }
+
+      if (!data.activeChildId && data.children && data.children.length > 0) {
+        data.activeChildId = data.children[0].id;
+      }
+
+      renderAll();
+    }
+
+    initApp();
+  </script>
+</body>
+</html>
