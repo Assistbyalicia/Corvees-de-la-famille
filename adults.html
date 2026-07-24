@@ -39,6 +39,10 @@
       </button>
     </div>
 
+    <div id="offline-badge" class="offline-banner">
+      ⚠️ Mode hors-ligne : impossible de joindre le serveur, les données affichées viennent de cet appareil.
+    </div>
+
     <div class="section">
       <h1>Carnet de quêtes – Vue adultes</h1>
       <p class="small">
@@ -65,6 +69,11 @@
     <div class="section">
       <h2>Tâches adultes</h2>
       <div id="adults-sections"></div>
+    </div>
+
+    <div class="section">
+      <h2>Corvées</h2>
+      <ul class="list" id="chores-list"></ul>
     </div>
 
     <div class="section">
@@ -264,6 +273,55 @@
       }
     }
 
+    function renderChoresList() {
+      const list = document.getElementById("chores-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+
+      (data.chores || []).forEach(chore => {
+        const li = document.createElement("li");
+
+        const assignedNames = (chore.assignedTo || [])
+          .map(id => {
+            const person = allPeople.find(p => p.id === id);
+            return person ? person.name : id;
+          })
+          .join(", ");
+
+        const left = document.createElement("span");
+        left.textContent = assignedNames
+          ? `${chore.label} (${chore.stars}⭐) — ${assignedNames}`
+          : `${chore.label} (${chore.stars}⭐) — tout le monde`;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Supprimer";
+
+        btn.addEventListener("click", async () => {
+          const index = (data.chores || []).indexOf(chore);
+          if (index !== -1) {
+            data.chores.splice(index, 1);
+            saveData(data);
+            renderChoresList();
+            renderChildrenTable();
+            renderAdultsSections();
+            await postDeleteChore(chore.id);
+          }
+        });
+
+        li.appendChild(left);
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+
+      if (!data.chores || data.chores.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune corvée configurée.";
+        list.appendChild(li);
+      }
+    }
+
     function renderRewardsList() {
       const list = document.getElementById("rewards-list");
       if (!list) return;
@@ -348,6 +406,7 @@
         saveData(data);
         renderChildrenTable();
         renderAdultsSections();
+        renderChoresList();
 
         inputLabel.value = "";
         inputStars.value = "1";
@@ -408,8 +467,10 @@
     async function initApp() {
       data = await loadAppData();
 
+      renderOfflineBadge(data);
       renderChildrenTable();
       renderAdultsSections();
+      renderChoresList();
       renderRewardsList();
       setupAddChoreForm();
       setupAddRewardForm();

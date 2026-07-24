@@ -81,11 +81,12 @@ async function loadAppData() {
       children: mergeById(config.children, local.children),
       adults: mergeById(config.adults, local.adults),
       chores: mergeById(config.chores, local.chores),
-      rewards: mergeById(config.rewards, local.rewards)
+      rewards: mergeById(config.rewards, local.rewards),
+      offline: false
     };
   } catch (e) {
     console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
-    return { ...defaultData, ...local };
+    return { ...defaultData, ...local, offline: true };
   }
 }
 
@@ -178,4 +179,27 @@ async function postDeleteReward(rewardId) {
   } catch (e) {
     console.warn("Impossible de supprimer la récompense dans Notion :", e);
   }
+}
+
+// action: "delete_chore" — archive la corvée dans Notion.
+async function postDeleteChore(choreId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "delete_chore",
+        choreId
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de supprimer la corvée dans Notion :", e);
+  }
+}
+
+// Affiche/masque un bandeau "hors-ligne" si l'API de config n'a pas répondu.
+function renderOfflineBadge(data) {
+  const badge = document.getElementById("offline-badge");
+  if (!badge) return;
+  badge.style.display = data.offline ? "block" : "none";
 }

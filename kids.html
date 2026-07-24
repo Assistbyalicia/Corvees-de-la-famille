@@ -60,6 +60,10 @@
     </button>
   </div>
 
+  <div id="offline-badge" class="offline-banner">
+    ⚠️ Mode hors-ligne : impossible de joindre le serveur, les données affichées viennent de cet appareil.
+  </div>
+
   <div class="section">
     <div class="header-row">
       <h1>Carnet de quêtes – Enfants</h1>
@@ -310,6 +314,7 @@
         data.activeChildId = data.children[0].id;
       }
 
+      renderOfflineBadge(data);
       renderAll();
     }
 

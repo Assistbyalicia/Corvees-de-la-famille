@@ -61,3 +61,14 @@ select {
   border: 1px solid #ccc;
   border-radius: 0.25rem;
 }
+
+.offline-banner {
+  display: none;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
