@@ -19,31 +19,34 @@
       flex-wrap: wrap;
     }
     .child {
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem 0.9rem;
       border-radius: 999px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--color-border);
       cursor: pointer;
       font-size: 0.9rem;
-      background: #fafafa;
+      font-weight: 600;
+      background: #FAF9FF;
     }
     .child.active {
-      background: #007bff;
+      background: var(--gradient-quest);
       color: #fff;
-      border-color: #007bff;
+      border-color: transparent;
+      box-shadow: 0 3px 10px rgba(108, 92, 231, 0.35);
     }
     .progress-bar {
       width: 100%;
-      height: 12px;
+      height: 14px;
       border-radius: 999px;
-      background: #e0e0e0;
+      background: #EDEAF9;
       margin-top: 0.5rem;
       overflow: hidden;
     }
     .progress-fill {
       height: 100%;
       width: 0%;
-      background: #28a745;
-      transition: width 0.2s ease;
+      background: var(--gradient-success);
+      border-radius: 999px;
+      transition: width 0.3s ease;
     }
     .header-row {
       display: flex;
@@ -55,10 +58,10 @@
 </head>
 <body>
   <div style="margin-bottom: 1rem; display:flex; justify-content:space-between;">
-    <button onclick="window.location.href='index.html'">
+    <button class="btn-secondary" onclick="window.location.href='index.html'">
       ← Retour à l’accueil
     </button>
-    <button id="logout-btn">Déconnexion</button>
+    <button id="logout-btn" class="btn-secondary">Déconnexion</button>
   </div>
 
   <div id="offline-badge" class="offline-banner">
@@ -73,7 +76,7 @@
   <div class="tab-panel" id="tab-quetes">
     <div class="section">
       <div class="header-row">
-        <h1>Carnet de quêtes – Enfants</h1>
+        <h1>⚔️ Carnet de quêtes – Enfants</h1>
         <span id="total-stars" class="badge">⭐ 0 étoiles</span>
       </div>
       <p class="small">
@@ -112,7 +115,7 @@
         <input id="change-pin-current" type="password" inputmode="numeric" placeholder="Code actuel" style="padding:0.25rem;" />
         <input id="change-pin-new" type="password" inputmode="numeric" placeholder="Nouveau code" style="padding:0.25rem;" />
         <input id="change-pin-confirm" type="password" inputmode="numeric" placeholder="Confirmer" style="padding:0.25rem;" />
-        <button id="change-pin-btn">Valider</button>
+        <button id="change-pin-btn" class="btn-primary">Valider</button>
       </div>
     </div>
 
@@ -125,7 +128,7 @@
       <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
         <input id="security-question-input" type="text" placeholder="Ta question (ex: nom de mon doudou ?)" style="flex:2; padding:0.25rem;" />
         <input id="security-answer-input" type="text" placeholder="Réponse" style="padding:0.25rem;" />
-        <button id="security-question-btn">Enregistrer</button>
+        <button id="security-question-btn" class="btn-primary">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -239,6 +242,7 @@
         status.textContent = completed ? "Déjà fait" : "À faire";
 
         const btn = document.createElement("button");
+        btn.className = completed ? "btn-secondary" : "btn-primary";
         btn.textContent = completed ? "Annuler" : "Valider";
 
         btn.addEventListener("click", async () => {
@@ -303,6 +307,7 @@
         const purchased = childState.purchasedRewards.includes(reward.id);
 
         const btn = document.createElement("button");
+        btn.className = purchased ? "btn-secondary" : "btn-primary";
         btn.textContent = purchased ? "Annuler" : "Acheter";
         btn.disabled = !purchased && childState.stars < reward.cost;
 

@@ -15,17 +15,19 @@
       max-width: 480px;
       width: 100%;
       background: #ffffff;
-      border-radius: 0.5rem;
-      padding: 1.5rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--color-border);
     }
     h1 {
       margin: 0 0 0.75rem;
+      font-size: 2rem;
     }
     p {
       margin: 0 0 1rem;
       font-size: 0.9rem;
-      color: #666;
+      color: var(--color-text-muted);
     }
     .people-grid {
       display: flex;
@@ -35,16 +37,20 @@
     }
     .person-btn {
       flex: 1 1 calc(50% - 0.75rem);
-      padding: 0.75rem;
-      border-radius: 0.5rem;
-      border: 1px solid #ccc;
-      background: #f9f9f9;
+      padding: 0.85rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: #FAF9FF;
       font-size: 1rem;
+      font-weight: 600;
       cursor: pointer;
       text-align: center;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
     }
     .person-btn:hover {
-      background: #f0f0f0;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card);
+      background: #ffffff;
     }
     .pin-form {
       margin-top: 1rem;
@@ -69,7 +75,6 @@
       display: none;
     }
     .small {
-      color: #999;
       margin-top: 1rem;
     }
     .session-box {
@@ -100,15 +105,15 @@
 </head>
 <body>
   <div class="container">
-    <h1>Carnet de quêtes</h1>
+    <h1>🗺️ Carnet de quêtes</h1>
 
     <div id="offline-badge" class="offline-banner"></div>
 
     <div id="session-box" class="session-box">
       <p id="session-text"></p>
       <div class="row">
-        <button id="continue-btn">Continuer</button>
-        <button id="logout-btn">Changer de personne</button>
+        <button id="continue-btn" class="btn-primary">Continuer</button>
+        <button id="logout-btn" class="btn-secondary">Changer de personne</button>
       </div>
     </div>
 
@@ -121,8 +126,8 @@
         <p class="pin-error" id="pin-error">Code incorrect, réessaie.</p>
         <input id="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="Code" />
         <div class="row">
-          <button id="pin-submit">Valider</button>
-          <button id="pin-cancel">Annuler</button>
+          <button id="pin-submit" class="btn-primary">Valider</button>
+          <button id="pin-cancel" class="btn-secondary">Annuler</button>
         </div>
       </div>
 
@@ -149,8 +154,8 @@
         <input id="forgot-new-pin" type="password" inputmode="numeric" placeholder="Nouveau code" />
         <input id="forgot-confirm-pin" type="password" inputmode="numeric" placeholder="Confirmer le nouveau code" />
         <div class="row">
-          <button id="forgot-submit-btn">Valider</button>
-          <button id="forgot-cancel-btn">Annuler</button>
+          <button id="forgot-submit-btn" class="btn-primary">Valider</button>
+          <button id="forgot-cancel-btn" class="btn-secondary">Annuler</button>
         </div>
       </div>
     </div>

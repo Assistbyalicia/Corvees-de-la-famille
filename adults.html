@@ -21,13 +21,17 @@
       font-size: 0.9rem;
     }
     th, td {
-      border-bottom: 1px solid #eee;
-      padding: 0.5rem;
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.6rem 0.5rem;
       text-align: left;
     }
     th {
-      background: #fafafa;
-      font-weight: 600;
+      background: #FAF9FF;
+      color: var(--color-text-muted);
+      font-weight: 700;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
     .people-picker {
       display: flex;
@@ -36,17 +40,19 @@
       flex-wrap: wrap;
     }
     .person-chip {
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem 0.9rem;
       border-radius: 999px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--color-border);
       cursor: pointer;
       font-size: 0.9rem;
-      background: #fafafa;
+      font-weight: 600;
+      background: #FAF9FF;
     }
     .person-chip.active {
-      background: #007bff;
+      background: var(--gradient-quest);
       color: #fff;
-      border-color: #007bff;
+      border-color: transparent;
+      box-shadow: 0 3px 10px rgba(108, 92, 231, 0.35);
     }
     body.restricted .people-picker {
       display: none;
@@ -62,10 +68,10 @@
 <body>
   <div class="container">
     <div style="margin-bottom: 1rem; display:flex; justify-content:space-between;">
-      <button onclick="window.location.href='index.html'">
+      <button class="btn-secondary" onclick="window.location.href='index.html'">
         ← Retour à l’accueil
       </button>
-      <button id="logout-btn">Déconnexion</button>
+      <button id="logout-btn" class="btn-secondary">Déconnexion</button>
     </div>
 
     <div id="offline-badge" class="offline-banner">
@@ -73,7 +79,7 @@
     </div>
 
     <div class="section">
-      <h1>Carnet de quêtes – Vue adultes</h1>
+      <h1>🏰 Carnet de quêtes – Vue adultes</h1>
       <p class="small">
         Récap des enfants et tâches des adultes.
       </p>
@@ -132,7 +138,7 @@
           <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
         </div>
         <div class="assign-checkboxes" id="new-chore-people" style="margin-top:0.5rem;"></div>
-        <button id="add-chore-btn" style="margin-top:0.5rem;">Ajouter</button>
+        <button id="add-chore-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </div>
     </div>
 
@@ -153,7 +159,7 @@
           <input id="new-reward-cost" type="number" min="1" max="50" value="1" style="width:80px; padding:0.25rem;" />
         </div>
         <div class="assign-checkboxes" id="new-reward-people" style="margin-top:0.5rem;"></div>
-        <button id="add-reward-btn" style="margin-top:0.5rem;">Ajouter</button>
+        <button id="add-reward-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </div>
     </div>
 
@@ -175,7 +181,7 @@
           <input id="change-pin-current" type="password" inputmode="numeric" placeholder="Code actuel" style="padding:0.25rem;" />
           <input id="change-pin-new" type="password" inputmode="numeric" placeholder="Nouveau code" style="padding:0.25rem;" />
           <input id="change-pin-confirm" type="password" inputmode="numeric" placeholder="Confirmer" style="padding:0.25rem;" />
-          <button id="change-pin-btn">Valider</button>
+          <button id="change-pin-btn" class="btn-primary">Valider</button>
         </div>
       </div>
 
@@ -188,7 +194,7 @@
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
           <input id="security-question-input" type="text" placeholder="Ta question" style="flex:2; padding:0.25rem;" />
           <input id="security-answer-input" type="text" placeholder="Réponse" style="padding:0.25rem;" />
-          <button id="security-question-btn">Enregistrer</button>
+          <button id="security-question-btn" class="btn-primary">Enregistrer</button>
         </div>
       </div>
     </div>
@@ -346,6 +352,7 @@
         status.textContent = completed ? "Déjà fait" : "À faire";
 
         const btn = document.createElement("button");
+        btn.className = completed ? "btn-secondary" : "btn-primary";
         btn.textContent = completed ? "Annuler" : "Valider";
 
         btn.addEventListener("click", async () => {
@@ -403,6 +410,7 @@
         const purchased = state.purchasedRewards.includes(reward.id);
 
         const btn = document.createElement("button");
+        btn.className = purchased ? "btn-secondary" : "btn-primary";
         btn.textContent = purchased ? "Annuler" : "Acheter";
         btn.disabled = !purchased && state.stars < reward.cost;
 
@@ -504,6 +512,7 @@
         });
 
         const btn = document.createElement("button");
+        btn.className = "btn-danger";
         btn.textContent = "Supprimer";
 
         btn.addEventListener("click", async () => {
@@ -569,6 +578,7 @@
         });
 
         const btn = document.createElement("button");
+        btn.className = "btn-danger";
         btn.textContent = "Supprimer";
 
         btn.addEventListener("click", async () => {
@@ -623,6 +633,7 @@
         input.style.padding = "0.25rem";
 
         const btn = document.createElement("button");
+        btn.className = "btn-primary";
         btn.textContent = "Réinitialiser";
 
         btn.addEventListener("click", async () => {
