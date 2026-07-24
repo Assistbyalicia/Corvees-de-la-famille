@@ -4,29 +4,16 @@
   <meta charset="UTF-8" />
   <title>Carnet de quêtes – Vue adultes</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="shared.css" />
   <style>
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
       padding: 1rem;
-      background: #f5f5f5;
       display: flex;
       justify-content: center;
     }
     .container {
       max-width: 800px;
       width: 100%;
-    }
-    .section {
-      background: #ffffff;
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    .small {
-      font-size: 0.8rem;
-      color: #666;
     }
     table {
       width: 100%;
@@ -41,40 +28,6 @@
     th {
       background: #fafafa;
       font-weight: 600;
-    }
-    .list {
-      list-style: none;
-      padding: 0;
-      margin: 0.5rem 0 0;
-    }
-    .list li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.5rem 0;
-      border-bottom: 1px solid #eee;
-      font-size: 0.95rem;
-    }
-    .list li:last-child {
-      border-bottom: none;
-    }
-    button {
-      padding: 0.25rem 0.5rem;
-      font-size: 0.85rem;
-      border-radius: 0.25rem;
-      border: 1px solid #ccc;
-      background: #f9f9f9;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #f0f0f0;
-    }
-    input[type="text"],
-    input[type="number"],
-    select {
-      font-size: 0.85rem;
-      border: 1px solid #ccc;
-      border-radius: 0.25rem;
     }
   </style>
 </head>
@@ -128,53 +81,9 @@
     </div>
   </div>
 
+  <script src="shared.js"></script>
   <script>
-    const STORAGE_KEY = "corvees-famille-adults-v1";
-    const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
-
-    const defaultData = {
-      children: [],
-      adults: [],
-      chores: [],
-      state: {}
-    };
-
-    function loadData() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { ...defaultData };
-      try {
-        const parsed = JSON.parse(raw);
-        return { ...defaultData, ...parsed };
-      } catch (e) {
-        console.error("Erreur de parsing localStorage", e);
-        return { ...defaultData };
-      }
-    }
-
-    function saveData(data) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-
     let data = null;
-
-    function getTodayKey() {
-      const d = new Date();
-      return d.toISOString().slice(0, 10);
-    }
-
-    function getPersonDayState(personId) {
-      const dayKey = getTodayKey();
-      if (!data.state[personId]) {
-        data.state[personId] = {};
-      }
-      if (!data.state[personId][dayKey]) {
-        data.state[personId][dayKey] = {
-          completedChores: [],
-          stars: 0
-        };
-      }
-      return data.state[personId][dayKey];
-    }
 
     function renderChildrenTable() {
       const tbody = document.querySelector("#children-table tbody");
@@ -254,10 +163,6 @@
           choresForPerson.some(chore => chore.id === id)
         ).length;
 
-        const remaining = choresForPerson.filter(chore =>
-          !state.completedChores.includes(chore.id)
-        );
-
         const completionRatio =
           totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
 
@@ -276,23 +181,53 @@
         const list = document.createElement("ul");
         list.className = "list";
 
-        remaining.forEach(chore => {
+        choresForPerson.forEach(chore => {
           const li = document.createElement("li");
+
           const left = document.createElement("span");
           left.textContent = `${chore.label} (+${chore.stars}⭐)`;
-          const right = document.createElement("span");
-          right.textContent = "À faire";
+
+          const right = document.createElement("div");
+
+          const completed = state.completedChores.includes(chore.id);
+
+          const status = document.createElement("span");
+          status.className = "badge";
+          status.textContent = completed ? "Déjà fait" : "À faire";
+
+          const btn = document.createElement("button");
+          btn.textContent = completed ? "Annuler" : "Valider";
+
+          btn.addEventListener("click", async () => {
+            const personState = getPersonDayState(person.id);
+            const index = personState.completedChores.indexOf(chore.id);
+            const isNowCompleted = index === -1;
+
+            if (isNowCompleted) {
+              personState.completedChores.push(chore.id);
+              personState.stars += chore.stars;
+              await postChoreComplete(person.id, chore.id);
+            } else {
+              personState.completedChores.splice(index, 1);
+              personState.stars -= chore.stars;
+              if (personState.stars < 0) personState.stars = 0;
+            }
+
+            saveData(data);
+            renderAdultsSections();
+          });
+
+          right.appendChild(status);
+          right.appendChild(btn);
+
           li.appendChild(left);
           li.appendChild(right);
           list.appendChild(li);
         });
 
-        if (remaining.length === 0) {
+        if (choresForPerson.length === 0) {
           const li = document.createElement("li");
-          li.textContent =
-            totalChores === 0
-              ? "Aucune corvée attribuée pour aujourd’hui."
-              : "Aucune corvée restante pour aujourd’hui.";
+          li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
           list.appendChild(li);
         }
 
@@ -354,79 +289,9 @@
         inputStars.value = "1";
       });
     }
-data = {
-  children: [
-    { id: "enfant-1", name: "Enfant 1" },
-    { id: "enfant-2", name: "Enfant 2" }
-  ],
-  adults: [
-    { id: "maman", name: "Maman" },
-    { id: "papa", name: "Papa" }
-  ],
-  chores: [
-    { id: "chore-1", label: "Ranger la chambre", stars: 2, assignedTo: ["enfant-1"] },
-    { id: "chore-2", label: "Vaisselle", stars: 2, assignedTo: ["maman"] },
-    { id: "chore-3", label: "Sortir les poubelles", stars: 1, assignedTo: ["papa"] }
-  ],
-  state: {
-    "enfant-1": {
-      [new Date().toISOString().slice(0, 10)]: {
-        completedChores: ["chore-1"],
-        stars: 2
-      }
-    },
-    "maman": {
-      [new Date().toISOString().slice(0, 10)]: {
-        completedChores: [],
-        stars: 0
-      }
-    },
-    "papa": {
-      [new Date().toISOString().slice(0, 10)]: {
-        completedChores: [],
-        stars: 0
-      }
-    }
-  }
-};
 
-// Et on commente initApp() et son appel :
-/*
-async function initApp() {
-  const local = loadData();
-  ...
-}
-initApp();
-*/
-
-// Remplace par :
-renderChildrenTable();
-renderAdultsSections();
-setupAddChoreForm();
     async function initApp() {
-      const local = loadData();
-
-      try {
-        const res = await fetch(API_CONFIG_URL);
-        if (!res.ok) throw new Error("API config non disponible");
-
-        const payload = await res.json();
-        const config = Array.isArray(payload) ? payload[0] : payload;
-
-        data = {
-          ...defaultData,
-          ...local,
-          children: config.children || local.children || defaultData.children,
-          adults: config.adults || local.adults || defaultData.adults,
-          chores: config.chores || local.chores || defaultData.chores
-        };
-      } catch (e) {
-        console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
-        data = {
-          ...defaultData,
-          ...local
-        };
-      }
+      data = await loadAppData();
 
       renderChildrenTable();
       renderAdultsSections();
