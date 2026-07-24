@@ -104,6 +104,7 @@
       <button class="tab-btn" data-tab="adultes">Adultes</button>
       <button class="tab-btn" data-tab="corvees">Corvées</button>
       <button class="tab-btn" data-tab="recompenses">Récompenses</button>
+      <button class="tab-btn" data-tab="codes">Codes</button>
     </div>
 
     <div class="tab-panel" id="tab-enfants">
@@ -172,6 +173,16 @@
         </div>
         <div class="assign-checkboxes" id="new-reward-people" style="margin-top:0.5rem;"></div>
         <button id="add-reward-btn" style="margin-top:0.5rem;">Ajouter</button>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-codes">
+      <div class="section">
+        <h2>Codes d'accès</h2>
+        <p class="small">
+          Consulte ou réinitialise le code de quelqu'un qui l'a oublié.
+        </p>
+        <ul class="list" id="codes-list"></ul>
       </div>
     </div>
 
@@ -606,6 +617,59 @@
       }
     }
 
+    function renderCodesList() {
+      const list = document.getElementById("codes-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+
+      allPeople.forEach(person => {
+        const li = document.createElement("li");
+
+        const currentCode = person.pin || AUTH_PINS[person.id] || "—";
+        const left = document.createElement("span");
+        left.textContent = `${person.name} : ${currentCode}`;
+
+        const right = document.createElement("div");
+        right.style.display = "flex";
+        right.style.gap = "0.5rem";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.inputMode = "numeric";
+        input.placeholder = "Nouveau code";
+        input.style.width = "100px";
+        input.style.padding = "0.25rem";
+
+        const btn = document.createElement("button");
+        btn.textContent = "Réinitialiser";
+
+        btn.addEventListener("click", async () => {
+          const newPin = input.value.trim();
+          if (!newPin) return;
+          person.pin = newPin;
+          saveData(data);
+          input.value = "";
+          renderCodesList();
+          await postUpdatePin(person.id, newPin);
+        });
+
+        right.appendChild(input);
+        right.appendChild(btn);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        list.appendChild(li);
+      });
+
+      if (allPeople.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune personne configurée.";
+        list.appendChild(li);
+      }
+    }
+
     function setupAddChoreForm() {
       const peopleContainer = document.getElementById("new-chore-people");
       const btnAdd = document.getElementById("add-chore-btn");
@@ -722,6 +786,7 @@
         renderAdultsSections();
         renderChoresList();
         renderRewardsList();
+        renderCodesList();
         setupAddChoreForm();
         setupAddRewardForm();
       } else {
