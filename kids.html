@@ -240,7 +240,12 @@
 
       const childState = getPersonDayState(data.activeChildId);
 
-      (data.rewards || []).forEach(reward => {
+      const rewardsForChild = (data.rewards || []).filter(reward => {
+        if (!reward.assignedTo || reward.assignedTo.length === 0) return true;
+        return reward.assignedTo.includes(data.activeChildId);
+      });
+
+      rewardsForChild.forEach(reward => {
         const li = document.createElement("li");
 
         const left = document.createElement("span");
@@ -278,7 +283,7 @@
         list.appendChild(li);
       });
 
-      if (!data.rewards || data.rewards.length === 0) {
+      if (rewardsForChild.length === 0) {
         const li = document.createElement("li");
         li.textContent = "Aucune récompense configurée.";
         list.appendChild(li);

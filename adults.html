@@ -79,6 +79,19 @@
         <button id="add-chore-btn">Ajouter</button>
       </div>
     </div>
+
+    <div class="section">
+      <h3>Ajouter une récompense</h3>
+      <p class="small">
+        Crée une récompense réservée à un enfant précis.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <input id="new-reward-label" type="text" placeholder="Nom de la récompense" style="flex:2; padding:0.25rem;" />
+        <input id="new-reward-cost" type="number" min="1" max="50" value="1" style="width:80px; padding:0.25rem;" />
+        <select id="new-reward-child" style="padding:0.25rem;"></select>
+        <button id="add-reward-btn">Ajouter</button>
+      </div>
+    </div>
   </div>
 
   <script src="shared.js"></script>
@@ -291,12 +304,59 @@
       });
     }
 
+    function setupAddRewardForm() {
+      const selectChild = document.getElementById("new-reward-child");
+      const btnAdd = document.getElementById("add-reward-btn");
+      const inputLabel = document.getElementById("new-reward-label");
+      const inputCost = document.getElementById("new-reward-cost");
+
+      if (!selectChild || !btnAdd || !inputLabel || !inputCost) return;
+
+      selectChild.innerHTML = "";
+      (data.children || []).forEach(child => {
+        const opt = document.createElement("option");
+        opt.value = child.id;
+        opt.textContent = child.name;
+        selectChild.appendChild(opt);
+      });
+
+      btnAdd.addEventListener("click", () => {
+        const label = inputLabel.value.trim();
+        const cost = parseInt(inputCost.value, 10) || 1;
+        const childId = selectChild.value;
+
+        if (!label) {
+          alert("Merci de saisir un nom de récompense.");
+          return;
+        }
+        if (!childId) {
+          alert("Merci de sélectionner un enfant.");
+          return;
+        }
+
+        const newId = `${childId}-${label.toLowerCase().replace(/\s+/g, "-")}`;
+
+        (data.rewards || (data.rewards = [])).push({
+          id: newId,
+          label,
+          cost,
+          assignedTo: [childId]
+        });
+
+        saveData(data);
+
+        inputLabel.value = "";
+        inputCost.value = "1";
+      });
+    }
+
     async function initApp() {
       data = await loadAppData();
 
       renderChildrenTable();
       renderAdultsSections();
       setupAddChoreForm();
+      setupAddRewardForm();
     }
 
     initApp();
