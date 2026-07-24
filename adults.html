@@ -81,6 +81,11 @@
     </div>
 
     <div class="section">
+      <h2>Récompenses</h2>
+      <ul class="list" id="rewards-list"></ul>
+    </div>
+
+    <div class="section">
       <h3>Ajouter une récompense</h3>
       <p class="small">
         Crée une récompense réservée à un enfant précis.
@@ -259,6 +264,51 @@
       }
     }
 
+    function renderRewardsList() {
+      const list = document.getElementById("rewards-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      (data.rewards || []).forEach(reward => {
+        const li = document.createElement("li");
+
+        const assignedNames = (reward.assignedTo || [])
+          .map(id => {
+            const child = (data.children || []).find(c => c.id === id);
+            return child ? child.name : id;
+          })
+          .join(", ");
+
+        const left = document.createElement("span");
+        left.textContent = assignedNames
+          ? `${reward.label} (${reward.cost}⭐) — ${assignedNames}`
+          : `${reward.label} (${reward.cost}⭐) — tout le monde`;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Supprimer";
+
+        btn.addEventListener("click", async () => {
+          const index = (data.rewards || []).indexOf(reward);
+          if (index !== -1) {
+            data.rewards.splice(index, 1);
+            saveData(data);
+            renderRewardsList();
+            await postDeleteReward(reward.id);
+          }
+        });
+
+        li.appendChild(left);
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+
+      if (!data.rewards || data.rewards.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune récompense configurée.";
+        list.appendChild(li);
+      }
+    }
+
     function setupAddChoreForm() {
       const selectPerson = document.getElementById("new-chore-person");
       const btnAdd = document.getElementById("add-chore-btn");
@@ -346,11 +396,12 @@
         });
 
         saveData(data);
+        renderRewardsList();
 
         inputLabel.value = "";
         inputCost.value = "1";
 
-        await postAddReward(newId, label, cost);
+        await postAddReward(newId, label, cost, childId);
       });
     }
 
@@ -359,6 +410,7 @@
 
       renderChildrenTable();
       renderAdultsSections();
+      renderRewardsList();
       setupAddChoreForm();
       setupAddRewardForm();
     }

@@ -146,7 +146,7 @@ async function postAddChore(choreId, label, stars, personId) {
 }
 
 // action: "add_reward" — crée la récompense dans Notion.
-async function postAddReward(rewardId, label, cost) {
+async function postAddReward(rewardId, label, cost, personId) {
   try {
     await fetch(API_COMPLETE_URL, {
       method: "POST",
@@ -155,10 +155,27 @@ async function postAddReward(rewardId, label, cost) {
         action: "add_reward",
         rewardId,
         label,
-        cost
+        cost,
+        personId
       })
     });
   } catch (e) {
     console.warn("Impossible de créer la récompense dans Notion :", e);
+  }
+}
+
+// action: "delete_reward" — archive la récompense dans Notion.
+async function postDeleteReward(rewardId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "delete_reward",
+        rewardId
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de supprimer la récompense dans Notion :", e);
   }
 }
