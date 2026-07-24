@@ -554,7 +554,8 @@
           id: newId,
           label,
           stars,
-          assignedTo: [personId]
+          assignedTo: [personId],
+          _source: "local"
         });
 
         saveData(data);
@@ -606,7 +607,8 @@
           id: newId,
           label,
           cost,
-          assignedTo: [personId]
+          assignedTo: [personId],
+          _source: "local"
         });
 
         saveData(data);

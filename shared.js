@@ -60,12 +60,17 @@ async function fetchRemoteConfig() {
 }
 
 // Combine une liste venant de Notion avec une liste locale : Notion fait autorité
-// pour les ids qu'il connaît, les entrées ajoutées localement (ex. via les
-// formulaires "Ajouter une corvée/récompense") sont conservées en plus.
+// pour les ids qu'il connaît. Seules les entrées explicitement marquées
+// _source: "local" (ajoutées via les formulaires, pas encore synchronisées
+// avec Notion) sont conservées en plus — les autres, si elles ont disparu de
+// Notion (supprimées là-bas), disparaissent aussi de l'app au lieu de rester
+// en cache indéfiniment dans le localStorage.
 function mergeById(configItems, localItems) {
   const list = configItems || [];
   const configIds = new Set(list.map(item => item.id));
-  const localOnly = (localItems || []).filter(item => !configIds.has(item.id));
+  const localOnly = (localItems || []).filter(
+    item => item._source === "local" && !configIds.has(item.id)
+  );
   return [...list, ...localOnly];
 }
 
