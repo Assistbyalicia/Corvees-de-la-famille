@@ -75,12 +75,14 @@ async function loadAppData() {
   }
 }
 
-async function postChoreComplete(personId, choreId) {
+// action: "complete" | "cancel" — un seul webhook, N8N distingue via le champ "action".
+async function postChoreAction(personId, choreId, action) {
   try {
     await fetch(API_COMPLETE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        action,
         personId,
         choreId,
         date: getTodayKey()
@@ -88,5 +90,23 @@ async function postChoreComplete(personId, choreId) {
     });
   } catch (e) {
     console.warn("Impossible de journaliser la corvée dans Notion :", e);
+  }
+}
+
+// action: "purchase" pour l'instant.
+async function postRewardAction(personId, rewardId, action) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action,
+        personId,
+        rewardId,
+        date: getTodayKey()
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de journaliser la récompense dans Notion :", e);
   }
 }

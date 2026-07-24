@@ -206,11 +206,12 @@
             if (isNowCompleted) {
               personState.completedChores.push(chore.id);
               personState.stars += chore.stars;
-              await postChoreComplete(person.id, chore.id);
+              await postChoreAction(person.id, chore.id, "complete");
             } else {
               personState.completedChores.splice(index, 1);
               personState.stars -= chore.stars;
               if (personState.stars < 0) personState.stars = 0;
+              await postChoreAction(person.id, chore.id, "cancel");
             }
 
             saveData(data);

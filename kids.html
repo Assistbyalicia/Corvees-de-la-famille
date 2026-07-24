@@ -200,11 +200,12 @@
           if (isNowCompleted) {
             state.completedChores.push(chore.id);
             state.stars += chore.stars;
-            await postChoreComplete(data.activeChildId, chore.id);
+            await postChoreAction(data.activeChildId, chore.id, "complete");
           } else {
             state.completedChores.splice(index, 1);
             state.stars -= chore.stars;
             if (state.stars < 0) state.stars = 0;
+            await postChoreAction(data.activeChildId, chore.id, "cancel");
           }
 
           saveData(data);
@@ -249,10 +250,11 @@
         btn.textContent = "Acheter";
         btn.disabled = childState.stars < reward.cost;
 
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
           const state = getPersonDayState(data.activeChildId);
           if (state.stars >= reward.cost) {
             state.stars -= reward.cost;
+            await postRewardAction(data.activeChildId, reward.id, "purchase");
             saveData(data);
             renderAll();
             alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
