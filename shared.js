@@ -12,7 +12,8 @@ const AUTH_ADMINS = ["maman"];
 const AUTH_PINS = {
   maman: "1234",
   Roxanne: "1111",
-  Elena: "2222"
+  Elena: "2222",
+  Steven: "5678"
 };
 
 const SESSION_KEY = "corvees-famille-session";
