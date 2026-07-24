@@ -3,6 +3,44 @@ const STORAGE_KEY = "corvees-famille-v1";
 const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
 const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
 
+// --- Authentification légère ---
+// Pas une vraie sécurité : ceci est un fichier statique sans serveur, donc ces
+// codes sont visibles en clair par quiconque ouvre ce fichier. Ça sert juste
+// à éviter qu'un enfant clique par erreur sur l'espace admin ou sur celui
+// d'un autre. Change les codes ci-dessous, et ajoute une ligne par personne.
+const AUTH_ADMINS = ["maman"];
+const AUTH_PINS = {
+  maman: "1234",
+  Roxanne: "1111",
+  Elena: "2222"
+};
+
+const SESSION_KEY = "corvees-famille-session";
+
+function getSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function setSession(personId) {
+  const session = { personId, isAdmin: AUTH_ADMINS.includes(personId) };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+function checkPin(personId, pin) {
+  return AUTH_PINS[personId] !== undefined && AUTH_PINS[personId] === pin;
+}
+
 const defaultData = {
   children: [],
   adults: [],

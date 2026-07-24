@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Carnet de quêtes – Accueil</title>
+  <title>Carnet de quêtes – Connexion</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="shared.css" />
   <style>
@@ -27,49 +27,211 @@
       font-size: 0.9rem;
       color: #666;
     }
-    .links {
+    .people-grid {
       display: flex;
-      flex-direction: column;
+      flex-wrap: wrap;
       gap: 0.75rem;
       margin-top: 1rem;
     }
-    a {
-      display: inline-block;
-      text-decoration: none;
-      text-align: center;
-      padding: 0.6rem 0.75rem;
-      border-radius: 0.35rem;
+    .person-btn {
+      flex: 1 1 calc(50% - 0.75rem);
+      padding: 0.75rem;
+      border-radius: 0.5rem;
       border: 1px solid #ccc;
       background: #f9f9f9;
-      font-size: 0.95rem;
-      color: #333;
+      font-size: 1rem;
+      cursor: pointer;
+      text-align: center;
     }
-    a:hover {
+    .person-btn:hover {
       background: #f0f0f0;
+    }
+    .pin-form {
+      margin-top: 1rem;
+      display: none;
+    }
+    .pin-form.active {
+      display: block;
+    }
+    .pin-form input {
+      font-size: 1.2rem;
+      text-align: center;
+      letter-spacing: 0.3rem;
+      padding: 0.5rem;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 0.5rem;
+    }
+    .pin-error {
+      color: #c0392b;
+      font-size: 0.85rem;
+      margin: 0 0 0.5rem;
+      display: none;
     }
     .small {
       color: #999;
       margin-top: 1rem;
+    }
+    .session-box {
+      display: none;
+    }
+    .session-box.active {
+      display: block;
+    }
+    .row {
+      display: flex;
+      gap: 0.5rem;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Carnet de quêtes</h1>
-    <p>
-      Choisis la vue adaptée : enfants pour valider les quêtes, adultes pour suivre
-      les corvées et ajouter des tâches.
-    </p>
 
-    <div class="links">
-      <a href="kids.html">Accéder à la vue enfants</a>
-      <a href="adults.html">Accéder à la vue adultes</a>
+    <div id="offline-badge" class="offline-banner"></div>
+
+    <div id="session-box" class="session-box">
+      <p id="session-text"></p>
+      <div class="row">
+        <button id="continue-btn">Continuer</button>
+        <button id="logout-btn">Changer de personne</button>
+      </div>
     </div>
 
-    <p class="small">
-      Les données sont synchronisées via N8N et Notion. Les vues partagent la même
-      configuration (personnes, corvées, récompenses).
-    </p>
+    <div id="login-box">
+      <p>Choisis qui tu es :</p>
+      <div class="people-grid" id="people-grid"></div>
+
+      <div class="pin-form" id="pin-form">
+        <p class="small" id="pin-label" style="margin-top:1rem;"></p>
+        <p class="pin-error" id="pin-error">Code incorrect, réessaie.</p>
+        <input id="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="Code" />
+        <div class="row">
+          <button id="pin-submit">Valider</button>
+          <button id="pin-cancel">Annuler</button>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <script src="shared.js"></script>
+  <script>
+    let data = null;
+    let selectedPersonId = null;
+
+    function goToPersonPage(personId, session) {
+      if (session.isAdmin) {
+        window.location.href = "adults.html";
+        return;
+      }
+      const isChild = (data.children || []).some(c => c.id === personId);
+      if (isChild) {
+        data.activeChildId = personId;
+        saveData(data);
+        window.location.href = "kids.html";
+      } else {
+        data.activeAdultId = personId;
+        saveData(data);
+        window.location.href = "adults.html";
+      }
+    }
+
+    function renderPeopleGrid() {
+      const grid = document.getElementById("people-grid");
+      grid.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+
+      allPeople.forEach(person => {
+        const btn = document.createElement("button");
+        btn.className = "person-btn";
+        btn.textContent = person.name;
+        btn.addEventListener("click", () => {
+          selectedPersonId = person.id;
+          document.getElementById("pin-label").textContent = `Code de ${person.name} :`;
+          document.getElementById("pin-error").style.display = "none";
+          document.getElementById("pin-input").value = "";
+          document.getElementById("pin-form").classList.add("active");
+          document.getElementById("pin-input").focus();
+        });
+        grid.appendChild(btn);
+      });
+
+      if (allPeople.length === 0) {
+        const span = document.createElement("span");
+        span.textContent = "Aucune personne configurée.";
+        grid.appendChild(span);
+      }
+    }
+
+    function setupPinForm() {
+      const submitBtn = document.getElementById("pin-submit");
+      const cancelBtn = document.getElementById("pin-cancel");
+      const input = document.getElementById("pin-input");
+      const errorText = document.getElementById("pin-error");
+
+      function attempt() {
+        if (!selectedPersonId) return;
+        if (checkPin(selectedPersonId, input.value.trim())) {
+          const session = setSession(selectedPersonId);
+          goToPersonPage(selectedPersonId, session);
+        } else {
+          errorText.style.display = "block";
+          input.value = "";
+          input.focus();
+        }
+      }
+
+      submitBtn.addEventListener("click", attempt);
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") attempt();
+      });
+      cancelBtn.addEventListener("click", () => {
+        selectedPersonId = null;
+        document.getElementById("pin-form").classList.remove("active");
+      });
+    }
+
+    function renderSessionBox() {
+      const session = getSession();
+      const sessionBox = document.getElementById("session-box");
+      const loginBox = document.getElementById("login-box");
+
+      if (!session) {
+        sessionBox.classList.remove("active");
+        loginBox.style.display = "block";
+        return;
+      }
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const person = allPeople.find(p => p.id === session.personId);
+      const name = person ? person.name : session.personId;
+
+      document.getElementById("session-text").textContent =
+        `Tu es déjà connecté(e) en tant que ${name}${session.isAdmin ? " (admin)" : ""}.`;
+
+      sessionBox.classList.add("active");
+      loginBox.style.display = "none";
+
+      document.getElementById("continue-btn").addEventListener("click", () => {
+        goToPersonPage(session.personId, session);
+      });
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        clearSession();
+        sessionBox.classList.remove("active");
+        loginBox.style.display = "block";
+      });
+    }
+
+    async function initApp() {
+      data = await loadAppData();
+      renderOfflineBadge(data);
+      renderSessionBox();
+      renderPeopleGrid();
+      setupPinForm();
+    }
+
+    initApp();
+  </script>
 </body>
 </html>

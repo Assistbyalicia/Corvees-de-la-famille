@@ -54,10 +54,11 @@
   </style>
 </head>
 <body>
-  <div style="margin-bottom: 1rem;">
+  <div style="margin-bottom: 1rem; display:flex; justify-content:space-between;">
     <button onclick="window.location.href='index.html'">
       ← Retour à l’accueil
     </button>
+    <button id="logout-btn">Déconnexion</button>
   </div>
 
   <div id="offline-badge" class="offline-banner">
@@ -99,12 +100,23 @@
   <script src="shared.js"></script>
   <script>
     let data = null;
+    let session = null;
 
     function renderChildren() {
       const container = document.getElementById("children");
       container.innerHTML = "";
 
       const childrenOnly = data.children || [];
+
+      if (!session.isAdmin) {
+        // Vue verrouillée sur la personne connectée : pas de sélecteur.
+        const activeChild = childrenOnly.find(c => c.id === data.activeChildId);
+        const span = document.createElement("span");
+        span.className = "child active";
+        span.textContent = activeChild ? activeChild.name : session.personId;
+        container.appendChild(span);
+        return;
+      }
 
       childrenOnly.forEach(child => {
         const btn = document.createElement("button");
@@ -308,14 +320,35 @@
     }
 
     async function initApp() {
+      session = getSession();
+      if (!session) {
+        window.location.href = "index.html";
+        return;
+      }
+
       data = await loadAppData();
 
-      if (!data.activeChildId && data.children && data.children.length > 0) {
-        data.activeChildId = data.children[0].id;
+      if (session.isAdmin) {
+        if (!data.activeChildId && data.children && data.children.length > 0) {
+          data.activeChildId = data.children[0].id;
+        }
+      } else {
+        const isChild = (data.children || []).some(c => c.id === session.personId);
+        if (!isChild) {
+          // Une personne non-enfant (adulte non-admin) n'a rien à faire ici.
+          window.location.href = "adults.html";
+          return;
+        }
+        data.activeChildId = session.personId;
       }
 
       renderOfflineBadge(data);
       renderAll();
+
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        clearSession();
+        window.location.href = "index.html";
+      });
     }
 
     initApp();

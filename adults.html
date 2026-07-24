@@ -73,14 +73,19 @@
       color: #fff;
       border-color: #007bff;
     }
+    body.restricted .tabs,
+    body.restricted .people-picker {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <div style="margin-bottom: 1rem;">
+    <div style="margin-bottom: 1rem; display:flex; justify-content:space-between;">
       <button onclick="window.location.href='index.html'">
         ← Retour à l’accueil
       </button>
+      <button id="logout-btn">Déconnexion</button>
     </div>
 
     <div id="offline-badge" class="offline-banner">
@@ -174,6 +179,15 @@
   <script src="shared.js"></script>
   <script>
     let data = null;
+    let session = null;
+
+    // Vue réduite pour un adulte non-admin : uniquement sa propre section,
+    // pas d'onglets, pas d'accès aux enfants/corvées/récompenses globales.
+    function setupRestrictedView() {
+      document.body.classList.add("restricted");
+      document.getElementById("tab-adultes").classList.add("active");
+      renderAdultsSections();
+    }
 
     function setupTabs() {
       const buttons = Array.from(document.querySelectorAll(".tab-btn"));
@@ -669,21 +683,45 @@
     }
 
     async function initApp() {
+      session = getSession();
+      if (!session) {
+        window.location.href = "index.html";
+        return;
+      }
+
       data = await loadAppData();
 
-      if (!data.activeAdultId && data.adults && data.adults.length > 0) {
-        data.activeAdultId = data.adults[0].id;
+      const isAdultPerson = (data.adults || []).some(p => p.id === session.personId);
+
+      if (!session.isAdmin && !isAdultPerson) {
+        // Un enfant n'a rien à faire dans la vue adultes.
+        window.location.href = "kids.html";
+        return;
       }
 
       renderOfflineBadge(data);
-      setupTabs();
-      renderChildrenTable();
-      renderAdultsPicker();
-      renderAdultsSections();
-      renderChoresList();
-      renderRewardsList();
-      setupAddChoreForm();
-      setupAddRewardForm();
+
+      if (session.isAdmin) {
+        if (!data.activeAdultId && data.adults && data.adults.length > 0) {
+          data.activeAdultId = data.adults[0].id;
+        }
+        setupTabs();
+        renderChildrenTable();
+        renderAdultsPicker();
+        renderAdultsSections();
+        renderChoresList();
+        renderRewardsList();
+        setupAddChoreForm();
+        setupAddRewardForm();
+      } else {
+        data.activeAdultId = session.personId;
+        setupRestrictedView();
+      }
+
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        clearSession();
+        window.location.href = "index.html";
+      });
     }
 
     initApp();
