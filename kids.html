@@ -97,6 +97,17 @@
     <ul class="list" id="rewards-list"></ul>
   </div>
 
+  <div class="section">
+    <h3>Changer mon code</h3>
+    <p id="change-pin-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+      <input id="change-pin-current" type="password" inputmode="numeric" placeholder="Code actuel" style="padding:0.25rem;" />
+      <input id="change-pin-new" type="password" inputmode="numeric" placeholder="Nouveau code" style="padding:0.25rem;" />
+      <input id="change-pin-confirm" type="password" inputmode="numeric" placeholder="Confirmer" style="padding:0.25rem;" />
+      <button id="change-pin-btn">Valider</button>
+    </div>
+  </div>
+
   <script src="shared.js"></script>
   <script>
     let data = null;
@@ -344,6 +355,7 @@
 
       renderOfflineBadge(data);
       renderAll();
+      setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();

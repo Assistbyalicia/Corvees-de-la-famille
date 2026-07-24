@@ -38,8 +38,13 @@ function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
-function checkPin(personId, pin) {
-  return AUTH_PINS[personId] !== undefined && AUTH_PINS[personId] === pin;
+// Le code d'une personne vient de Notion (propriété "Code", champ `pin` dans
+// la config) si elle en a défini un ; sinon on retombe sur AUTH_PINS
+// ci-dessus (utile pour une personne qui n'a pas encore de code dans Notion).
+function checkPin(personId, pin, allPeople) {
+  const person = (allPeople || []).find(p => p.id === personId);
+  const expected = (person && person.pin) || AUTH_PINS[personId];
+  return expected !== undefined && expected === pin;
 }
 
 const defaultData = {
@@ -278,9 +283,72 @@ async function postDeleteChore(choreId) {
   }
 }
 
+// action: "update_pin" — enregistre le nouveau code de la personne dans Notion.
+async function postUpdatePin(personId, newPin) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_pin",
+        personId,
+        newPin
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour le code dans Notion :", e);
+  }
+}
+
 // Affiche/masque un bandeau "hors-ligne" si l'API de config n'a pas répondu.
 function renderOfflineBadge(data) {
   const badge = document.getElementById("offline-badge");
   if (!badge) return;
   badge.style.display = data.offline ? "block" : "none";
+}
+
+// Formulaire partagé "Changer mon code" : attend les éléments d'id
+// change-pin-current / change-pin-new / change-pin-confirm / change-pin-btn /
+// change-pin-message sur la page.
+function setupChangePinForm(session, allPeople) {
+  const btn = document.getElementById("change-pin-btn");
+  const currentInput = document.getElementById("change-pin-current");
+  const newInput = document.getElementById("change-pin-new");
+  const confirmInput = document.getElementById("change-pin-confirm");
+  const message = document.getElementById("change-pin-message");
+
+  if (!btn || !currentInput || !newInput || !confirmInput || !message) return;
+
+  btn.addEventListener("click", async () => {
+    message.style.display = "none";
+
+    const current = currentInput.value.trim();
+    const next = newInput.value.trim();
+    const confirmValue = confirmInput.value.trim();
+
+    if (!checkPin(session.personId, current, allPeople)) {
+      message.textContent = "Code actuel incorrect.";
+      message.style.display = "block";
+      return;
+    }
+    if (!next) {
+      message.textContent = "Merci de saisir un nouveau code.";
+      message.style.display = "block";
+      return;
+    }
+    if (next !== confirmValue) {
+      message.textContent = "Les deux codes ne correspondent pas.";
+      message.style.display = "block";
+      return;
+    }
+
+    await postUpdatePin(session.personId, next);
+
+    message.style.color = "#28a745";
+    message.textContent = "Code mis à jour !";
+    message.style.display = "block";
+    currentInput.value = "";
+    newInput.value = "";
+    confirmInput.value = "";
+  });
 }

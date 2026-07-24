@@ -172,7 +172,8 @@
 
       function attempt() {
         if (!selectedPersonId) return;
-        if (checkPin(selectedPersonId, input.value.trim())) {
+        const allPeople = [...(data.children || []), ...(data.adults || [])];
+        if (checkPin(selectedPersonId, input.value.trim(), allPeople)) {
           const session = setSession(selectedPersonId);
           goToPersonPage(selectedPersonId, session);
         } else {
