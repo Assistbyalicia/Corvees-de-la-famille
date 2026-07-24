@@ -58,6 +58,16 @@ async function fetchRemoteConfig() {
   return Array.isArray(payload) ? payload[0] : payload;
 }
 
+// Combine une liste venant de Notion avec une liste locale : Notion fait autorité
+// pour les ids qu'il connaît, les entrées ajoutées localement (ex. via les
+// formulaires "Ajouter une corvée/récompense") sont conservées en plus.
+function mergeById(configItems, localItems) {
+  const list = configItems || [];
+  const configIds = new Set(list.map(item => item.id));
+  const localOnly = (localItems || []).filter(item => !configIds.has(item.id));
+  return [...list, ...localOnly];
+}
+
 // Fusionne la config N8N/Notion avec le localStorage local (personnes, corvées, récompenses).
 // Le state (corvées faites du jour) reste toujours celui du localStorage.
 async function loadAppData() {
@@ -68,10 +78,10 @@ async function loadAppData() {
     return {
       ...defaultData,
       ...local,
-      children: config.children || local.children || defaultData.children,
-      adults: config.adults || local.adults || defaultData.adults,
-      chores: config.chores || local.chores || defaultData.chores,
-      rewards: config.rewards || local.rewards || defaultData.rewards
+      children: mergeById(config.children, local.children),
+      adults: mergeById(config.adults, local.adults),
+      chores: mergeById(config.chores, local.chores),
+      rewards: mergeById(config.rewards, local.rewards)
     };
   } catch (e) {
     console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
