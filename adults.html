@@ -29,6 +29,50 @@
       background: #fafafa;
       font-weight: 600;
     }
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid #ddd;
+      background: #fafafa;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .tab-btn.active {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .people-picker {
+      display: flex;
+      gap: 0.5rem;
+      margin: 0.5rem 0 1rem;
+      flex-wrap: wrap;
+    }
+    .person-chip {
+      padding: 0.5rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: #fafafa;
+    }
+    .person-chip.active {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
   </style>
 </head>
 <body>
@@ -50,60 +94,77 @@
       </p>
     </div>
 
-    <div class="section">
-      <h2>Enfants – tableau de bord</h2>
-      <table id="children-table">
-        <thead>
-          <tr>
-            <th>Enfant</th>
-            <th>Corvées faites</th>
-            <th>Corvées totales</th>
-            <th>Complétion</th>
-            <th>Étoiles</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+    <div class="tabs" id="tabs">
+      <button class="tab-btn" data-tab="enfants">Enfants</button>
+      <button class="tab-btn" data-tab="adultes">Adultes</button>
+      <button class="tab-btn" data-tab="corvees">Corvées</button>
+      <button class="tab-btn" data-tab="recompenses">Récompenses</button>
     </div>
 
-    <div class="section">
-      <h2>Tâches adultes</h2>
-      <div id="adults-sections"></div>
-    </div>
-
-    <div class="section">
-      <h2>Corvées</h2>
-      <ul class="list" id="chores-list"></ul>
-    </div>
-
-    <div class="section">
-      <h3>Ajouter une corvée</h3>
-      <p class="small">
-        Crée une nouvelle corvée et assigne-la à une personne (enfant ou adulte).
-      </p>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
-        <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
-        <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
-        <select id="new-chore-person" style="padding:0.25rem;"></select>
-        <button id="add-chore-btn">Ajouter</button>
+    <div class="tab-panel" id="tab-enfants">
+      <div class="section">
+        <h2>Enfants – tableau de bord</h2>
+        <table id="children-table">
+          <thead>
+            <tr>
+              <th>Enfant</th>
+              <th>Corvées faites</th>
+              <th>Corvées totales</th>
+              <th>Complétion</th>
+              <th>Étoiles</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
 
-    <div class="section">
-      <h2>Récompenses</h2>
-      <ul class="list" id="rewards-list"></ul>
+    <div class="tab-panel" id="tab-adultes">
+      <div class="section">
+        <h2>Adultes</h2>
+        <p class="small">Adulte actif :</p>
+        <div class="people-picker" id="adults-picker"></div>
+        <div id="adults-sections"></div>
+      </div>
     </div>
 
-    <div class="section">
-      <h3>Ajouter une récompense</h3>
-      <p class="small">
-        Crée une récompense réservée à une personne précise (enfant ou adulte).
-      </p>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
-        <input id="new-reward-label" type="text" placeholder="Nom de la récompense" style="flex:2; padding:0.25rem;" />
-        <input id="new-reward-cost" type="number" min="1" max="50" value="1" style="width:80px; padding:0.25rem;" />
-        <select id="new-reward-person" style="padding:0.25rem;"></select>
-        <button id="add-reward-btn">Ajouter</button>
+    <div class="tab-panel" id="tab-corvees">
+      <div class="section">
+        <h2>Corvées</h2>
+        <ul class="list" id="chores-list"></ul>
+      </div>
+
+      <div class="section">
+        <h3>Ajouter une corvée</h3>
+        <p class="small">
+          Crée une nouvelle corvée et assigne-la à une personne (enfant ou adulte).
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+          <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+          <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+          <select id="new-chore-person" style="padding:0.25rem;"></select>
+          <button id="add-chore-btn">Ajouter</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-recompenses">
+      <div class="section">
+        <h2>Récompenses</h2>
+        <ul class="list" id="rewards-list"></ul>
+      </div>
+
+      <div class="section">
+        <h3>Ajouter une récompense</h3>
+        <p class="small">
+          Crée une récompense réservée à une personne précise (enfant ou adulte).
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+          <input id="new-reward-label" type="text" placeholder="Nom de la récompense" style="flex:2; padding:0.25rem;" />
+          <input id="new-reward-cost" type="number" min="1" max="50" value="1" style="width:80px; padding:0.25rem;" />
+          <select id="new-reward-person" style="padding:0.25rem;"></select>
+          <button id="add-reward-btn">Ajouter</button>
+        </div>
       </div>
     </div>
   </div>
@@ -111,6 +172,22 @@
   <script src="shared.js"></script>
   <script>
     let data = null;
+
+    function setupTabs() {
+      const buttons = Array.from(document.querySelectorAll(".tab-btn"));
+      const panels = Array.from(document.querySelectorAll(".tab-panel"));
+
+      function activate(tabName) {
+        buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabName));
+        panels.forEach(panel => panel.classList.toggle("active", panel.id === `tab-${tabName}`));
+      }
+
+      buttons.forEach(btn => {
+        btn.addEventListener("click", () => activate(btn.dataset.tab));
+      });
+
+      activate(buttons[0].dataset.tab);
+    }
 
     function renderChildrenTable() {
       const tbody = document.querySelector("#children-table tbody");
@@ -167,6 +244,33 @@
       }
     }
 
+    function renderAdultsPicker() {
+      const container = document.getElementById("adults-picker");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const adults = data.adults || [];
+
+      adults.forEach(person => {
+        const btn = document.createElement("button");
+        btn.className = "person-chip" + (person.id === data.activeAdultId ? " active" : "");
+        btn.textContent = person.name;
+        btn.addEventListener("click", () => {
+          data.activeAdultId = person.id;
+          saveData(data);
+          renderAdultsPicker();
+          renderAdultsSections();
+        });
+        container.appendChild(btn);
+      });
+
+      if (adults.length === 0) {
+        const span = document.createElement("span");
+        span.textContent = "Aucun adulte configuré.";
+        container.appendChild(span);
+      }
+    }
+
     function renderAdultsSections() {
       const container = document.getElementById("adults-sections");
       if (!container) return;
@@ -174,159 +278,150 @@
 
       const adults = data.adults || [];
 
-      adults.forEach(person => {
-        const state = getPersonDayState(person.id);
+      if (adults.length === 0) {
+        container.textContent = "";
+        return;
+      }
 
-        const choresForPerson = (data.chores || []).filter(chore => {
-          if (chore.assignedTo && chore.assignedTo.length > 0) {
-            return chore.assignedTo.includes(person.id);
-          }
-          // Si pas d'assignation explicite, on considère que c'est visible pour les adultes
-          return true;
-        });
+      const person = adults.find(p => p.id === data.activeAdultId) || adults[0];
+      data.activeAdultId = person.id;
 
-        const totalChores = choresForPerson.length;
-        const completedCount = state.completedChores.filter(id =>
-          choresForPerson.some(chore => chore.id === id)
-        ).length;
+      const state = getPersonDayState(person.id);
 
-        const completionRatio =
-          totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
-
-        const section = document.createElement("div");
-        section.className = "section";
-
-        const title = document.createElement("h3");
-        title.textContent = person.name;
-
-        const summary = document.createElement("p");
-        summary.className = "small";
-        summary.textContent =
-          `${completedCount}/${totalChores} corvées faites ` +
-          `(${completionRatio}%), ${state.stars}⭐.`;
-
-        const list = document.createElement("ul");
-        list.className = "list";
-
-        choresForPerson.forEach(chore => {
-          const li = document.createElement("li");
-
-          const left = document.createElement("span");
-          left.textContent = `${chore.label} (+${chore.stars}⭐)`;
-
-          const right = document.createElement("div");
-
-          const completed = state.completedChores.includes(chore.id);
-
-          const status = document.createElement("span");
-          status.className = "badge";
-          status.textContent = completed ? "Déjà fait" : "À faire";
-
-          const btn = document.createElement("button");
-          btn.textContent = completed ? "Annuler" : "Valider";
-
-          btn.addEventListener("click", async () => {
-            const personState = getPersonDayState(person.id);
-            const index = personState.completedChores.indexOf(chore.id);
-            const isNowCompleted = index === -1;
-
-            if (isNowCompleted) {
-              personState.completedChores.push(chore.id);
-              personState.stars += chore.stars;
-              await postChoreAction(person.id, chore.id, "complete");
-            } else {
-              personState.completedChores.splice(index, 1);
-              personState.stars -= chore.stars;
-              if (personState.stars < 0) personState.stars = 0;
-              await postChoreAction(person.id, chore.id, "cancel");
-            }
-
-            saveData(data);
-            renderAdultsSections();
-          });
-
-          right.appendChild(status);
-          right.appendChild(btn);
-
-          li.appendChild(left);
-          li.appendChild(right);
-          list.appendChild(li);
-        });
-
-        if (choresForPerson.length === 0) {
-          const li = document.createElement("li");
-          li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
-          list.appendChild(li);
+      const choresForPerson = (data.chores || []).filter(chore => {
+        if (chore.assignedTo && chore.assignedTo.length > 0) {
+          return chore.assignedTo.includes(person.id);
         }
-
-        const rewardsForPerson = (data.rewards || []).filter(reward => {
-          if (!reward.assignedTo || reward.assignedTo.length === 0) return true;
-          return reward.assignedTo.includes(person.id);
-        });
-
-        const rewardsTitle = document.createElement("h4");
-        rewardsTitle.textContent = "Récompenses";
-        rewardsTitle.style.marginTop = "1rem";
-
-        const rewardsList = document.createElement("ul");
-        rewardsList.className = "list";
-
-        rewardsForPerson.forEach(reward => {
-          const li = document.createElement("li");
-
-          const left = document.createElement("span");
-          left.textContent = `${reward.label} (${reward.cost}⭐)`;
-
-          const purchased = state.purchasedRewards.includes(reward.id);
-
-          const btn = document.createElement("button");
-          btn.textContent = purchased ? "Annuler" : "Acheter";
-          btn.disabled = !purchased && state.stars < reward.cost;
-
-          btn.addEventListener("click", async () => {
-            const personState = getPersonDayState(person.id);
-            const index = personState.purchasedRewards.indexOf(reward.id);
-
-            if (index === -1) {
-              if (personState.stars < reward.cost) return;
-              personState.stars -= reward.cost;
-              personState.purchasedRewards.push(reward.id);
-              await postRewardAction(person.id, reward.id, "purchase");
-            } else {
-              personState.stars += reward.cost;
-              personState.purchasedRewards.splice(index, 1);
-              await postRewardAction(person.id, reward.id, "cancel_purchase");
-            }
-
-            saveData(data);
-            renderAdultsSections();
-          });
-
-          li.appendChild(left);
-          li.appendChild(btn);
-          rewardsList.appendChild(li);
-        });
-
-        if (rewardsForPerson.length === 0) {
-          const li = document.createElement("li");
-          li.textContent = "Aucune récompense disponible.";
-          rewardsList.appendChild(li);
-        }
-
-        section.appendChild(title);
-        section.appendChild(summary);
-        section.appendChild(list);
-        section.appendChild(rewardsTitle);
-        section.appendChild(rewardsList);
-        container.appendChild(section);
+        // Si pas d'assignation explicite, on considère que c'est visible pour les adultes
+        return true;
       });
 
-      if (adults.length === 0) {
-        const section = document.createElement("div");
-        section.className = "section";
-        section.textContent = "Aucun adulte configuré.";
-        container.appendChild(section);
+      const totalChores = choresForPerson.length;
+      const completedCount = state.completedChores.filter(id =>
+        choresForPerson.some(chore => chore.id === id)
+      ).length;
+
+      const completionRatio =
+        totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
+
+      const summary = document.createElement("p");
+      summary.className = "small";
+      summary.textContent =
+        `${completedCount}/${totalChores} corvées faites ` +
+        `(${completionRatio}%), ${state.stars}⭐.`;
+
+      const list = document.createElement("ul");
+      list.className = "list";
+
+      choresForPerson.forEach(chore => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+
+        const right = document.createElement("div");
+
+        const completed = state.completedChores.includes(chore.id);
+
+        const status = document.createElement("span");
+        status.className = "badge";
+        status.textContent = completed ? "Déjà fait" : "À faire";
+
+        const btn = document.createElement("button");
+        btn.textContent = completed ? "Annuler" : "Valider";
+
+        btn.addEventListener("click", async () => {
+          const personState = getPersonDayState(person.id);
+          const index = personState.completedChores.indexOf(chore.id);
+          const isNowCompleted = index === -1;
+
+          if (isNowCompleted) {
+            personState.completedChores.push(chore.id);
+            personState.stars += chore.stars;
+            await postChoreAction(person.id, chore.id, "complete");
+          } else {
+            personState.completedChores.splice(index, 1);
+            personState.stars -= chore.stars;
+            if (personState.stars < 0) personState.stars = 0;
+            await postChoreAction(person.id, chore.id, "cancel");
+          }
+
+          saveData(data);
+          renderAdultsSections();
+        });
+
+        right.appendChild(status);
+        right.appendChild(btn);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        list.appendChild(li);
+      });
+
+      if (choresForPerson.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
+        list.appendChild(li);
       }
+
+      const rewardsForPerson = (data.rewards || []).filter(reward => {
+        if (!reward.assignedTo || reward.assignedTo.length === 0) return true;
+        return reward.assignedTo.includes(person.id);
+      });
+
+      const rewardsTitle = document.createElement("h4");
+      rewardsTitle.textContent = "Récompenses";
+      rewardsTitle.style.marginTop = "1rem";
+
+      const rewardsList = document.createElement("ul");
+      rewardsList.className = "list";
+
+      rewardsForPerson.forEach(reward => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${reward.label} (${reward.cost}⭐)`;
+
+        const purchased = state.purchasedRewards.includes(reward.id);
+
+        const btn = document.createElement("button");
+        btn.textContent = purchased ? "Annuler" : "Acheter";
+        btn.disabled = !purchased && state.stars < reward.cost;
+
+        btn.addEventListener("click", async () => {
+          const personState = getPersonDayState(person.id);
+          const index = personState.purchasedRewards.indexOf(reward.id);
+
+          if (index === -1) {
+            if (personState.stars < reward.cost) return;
+            personState.stars -= reward.cost;
+            personState.purchasedRewards.push(reward.id);
+            await postRewardAction(person.id, reward.id, "purchase");
+          } else {
+            personState.stars += reward.cost;
+            personState.purchasedRewards.splice(index, 1);
+            await postRewardAction(person.id, reward.id, "cancel_purchase");
+          }
+
+          saveData(data);
+          renderAdultsSections();
+        });
+
+        li.appendChild(left);
+        li.appendChild(btn);
+        rewardsList.appendChild(li);
+      });
+
+      if (rewardsForPerson.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune récompense disponible.";
+        rewardsList.appendChild(li);
+      }
+
+      container.appendChild(summary);
+      container.appendChild(list);
+      container.appendChild(rewardsTitle);
+      container.appendChild(rewardsList);
     }
 
     function renderChoresList() {
@@ -528,8 +623,14 @@
     async function initApp() {
       data = await loadAppData();
 
+      if (!data.activeAdultId && data.adults && data.adults.length > 0) {
+        data.activeAdultId = data.adults[0].id;
+      }
+
       renderOfflineBadge(data);
+      setupTabs();
       renderChildrenTable();
+      renderAdultsPicker();
       renderAdultsSections();
       renderChoresList();
       renderRewardsList();

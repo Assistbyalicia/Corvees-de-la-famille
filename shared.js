@@ -9,6 +9,7 @@ const defaultData = {
   chores: [],
   rewards: [],
   activeChildId: null,
+  activeAdultId: null,
   state: {}
 };
 
