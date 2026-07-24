@@ -16,6 +16,14 @@ const AUTH_PINS = {
   Steven: "5678"
 };
 
+// Code de récupération familial : à donner oralement à quelqu'un qui a oublié
+// son code personnel, pour qu'il/elle puisse en choisir un nouveau sans
+// connaître l'ancien (voir "Code oublié ?" sur la page de connexion).
+// Change-le si tu veux, comme les codes ci-dessus il n'apporte aucune vraie
+// sécurité, il sert juste à éviter qu'on réinitialise le code de quelqu'un
+// d'autre par erreur ou curiosité.
+const FAMILY_RECOVERY_CODE = "7777";
+
 const SESSION_KEY = "corvees-famille-session";
 
 function getSession() {
@@ -45,6 +53,15 @@ function checkPin(personId, pin, allPeople) {
   const person = (allPeople || []).find(p => p.id === personId);
   const expected = (person && person.pin) || AUTH_PINS[personId];
   return expected !== undefined && expected === pin;
+}
+
+// La question secrète (et sa réponse) ne vient que de Notion : contrairement
+// au code, il n'y a pas de valeur par défaut codée en dur, chacun la définit
+// lui-même depuis "Ma question secrète" une fois connecté.
+function checkSecurityAnswer(personId, answer, allPeople) {
+  const person = (allPeople || []).find(p => p.id === personId);
+  if (!person || !person.answer) return false;
+  return person.answer.trim().toLowerCase() === (answer || "").trim().toLowerCase();
 }
 
 const defaultData = {
@@ -307,6 +324,25 @@ async function postUpdatePin(personId, newPin) {
   }
 }
 
+// action: "update_security_question" — enregistre la question/réponse secrète
+// de la personne dans Notion (utilisée par le flux "Code oublié ?").
+async function postUpdateSecurityQuestion(personId, question, answer) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_security_question",
+        personId,
+        question,
+        answer
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour la question secrète dans Notion :", e);
+  }
+}
+
 // Affiche/masque un bandeau "hors-ligne" si l'API de config n'a pas répondu.
 function renderOfflineBadge(data) {
   const badge = document.getElementById("offline-badge");
@@ -357,5 +393,43 @@ function setupChangePinForm(session, allPeople) {
     currentInput.value = "";
     newInput.value = "";
     confirmInput.value = "";
+  });
+}
+
+// Formulaire partagé "Ma question secrète" : attend les éléments d'id
+// security-question-input / security-answer-input / security-question-btn /
+// security-question-message sur la page. Pré-remplit la question actuelle
+// si déjà définie, pour permettre de la modifier facilement.
+function setupSecurityQuestionForm(session, allPeople) {
+  const btn = document.getElementById("security-question-btn");
+  const questionInput = document.getElementById("security-question-input");
+  const answerInput = document.getElementById("security-answer-input");
+  const message = document.getElementById("security-question-message");
+
+  if (!btn || !questionInput || !answerInput || !message) return;
+
+  const person = (allPeople || []).find(p => p.id === session.personId);
+  if (person && person.question) {
+    questionInput.value = person.question;
+  }
+
+  btn.addEventListener("click", async () => {
+    message.style.display = "none";
+
+    const question = questionInput.value.trim();
+    const answer = answerInput.value.trim();
+
+    if (!question || !answer) {
+      message.textContent = "Merci de saisir une question et une réponse.";
+      message.style.display = "block";
+      return;
+    }
+
+    await postUpdateSecurityQuestion(session.personId, question, answer);
+
+    message.style.color = "#28a745";
+    message.textContent = "Question secrète enregistrée !";
+    message.style.display = "block";
+    answerInput.value = "";
   });
 }

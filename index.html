@@ -82,6 +82,20 @@
       display: flex;
       gap: 0.5rem;
     }
+    .forgot-pin-form {
+      margin-top: 1rem;
+      display: none;
+    }
+    .forgot-pin-form.active {
+      display: block;
+    }
+    .forgot-pin-form select,
+    .forgot-pin-form input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -109,6 +123,34 @@
         <div class="row">
           <button id="pin-submit">Valider</button>
           <button id="pin-cancel">Annuler</button>
+        </div>
+      </div>
+
+      <p class="small"><a href="#" id="forgot-pin-link">Code oublié ?</a></p>
+
+      <div class="forgot-pin-form" id="forgot-pin-form">
+        <p class="small">Choisis ton nom :</p>
+        <p class="pin-error" id="forgot-pin-message"></p>
+        <select id="forgot-person"></select>
+
+        <div id="forgot-security-block">
+          <p class="small" id="forgot-security-question"></p>
+          <input id="forgot-security-answer" type="text" placeholder="Réponse à ta question secrète" />
+        </div>
+
+        <div id="forgot-recovery-block">
+          <p class="small">
+            Cette personne n'a pas encore défini de question secrète : demande
+            le code de récupération familial à maman.
+          </p>
+          <input id="forgot-recovery-code" type="password" inputmode="numeric" placeholder="Code de récupération familial" />
+        </div>
+
+        <input id="forgot-new-pin" type="password" inputmode="numeric" placeholder="Nouveau code" />
+        <input id="forgot-confirm-pin" type="password" inputmode="numeric" placeholder="Confirmer le nouveau code" />
+        <div class="row">
+          <button id="forgot-submit-btn">Valider</button>
+          <button id="forgot-cancel-btn">Annuler</button>
         </div>
       </div>
     </div>
@@ -224,12 +266,120 @@
       });
     }
 
+    function renderForgotPersonSelect() {
+      const select = document.getElementById("forgot-person");
+      if (!select) return;
+      select.innerHTML = "";
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      allPeople.forEach(person => {
+        const option = document.createElement("option");
+        option.value = person.id;
+        option.textContent = person.name;
+        select.appendChild(option);
+      });
+    }
+
+    // Bascule entre "répondre à sa question secrète" et "code de récupération
+    // familial", selon si la personne choisie a défini une question ou non.
+    function updateForgotBlocks() {
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const personId = document.getElementById("forgot-person").value;
+      const person = allPeople.find(p => p.id === personId);
+
+      const securityBlock = document.getElementById("forgot-security-block");
+      const recoveryBlock = document.getElementById("forgot-recovery-block");
+      const questionText = document.getElementById("forgot-security-question");
+
+      if (person && person.question) {
+        questionText.textContent = person.question;
+        securityBlock.style.display = "block";
+        recoveryBlock.style.display = "none";
+      } else {
+        securityBlock.style.display = "none";
+        recoveryBlock.style.display = "block";
+      }
+    }
+
+    function setupForgotPinForm() {
+      const link = document.getElementById("forgot-pin-link");
+      const form = document.getElementById("forgot-pin-form");
+      const cancelBtn = document.getElementById("forgot-cancel-btn");
+      const submitBtn = document.getElementById("forgot-submit-btn");
+      const message = document.getElementById("forgot-pin-message");
+      const personSelect = document.getElementById("forgot-person");
+
+      if (!link || !form || !cancelBtn || !submitBtn || !message || !personSelect) return;
+
+      personSelect.addEventListener("change", updateForgotBlocks);
+
+      link.addEventListener("click", e => {
+        e.preventDefault();
+        document.getElementById("pin-form").classList.remove("active");
+        message.style.display = "none";
+        form.classList.add("active");
+        updateForgotBlocks();
+      });
+
+      cancelBtn.addEventListener("click", () => {
+        form.classList.remove("active");
+      });
+
+      submitBtn.addEventListener("click", async () => {
+        message.style.display = "none";
+
+        const allPeople = [...(data.children || []), ...(data.adults || [])];
+        const personId = document.getElementById("forgot-person").value;
+        const person = allPeople.find(p => p.id === personId);
+        const newPin = document.getElementById("forgot-new-pin").value.trim();
+        const confirmPin = document.getElementById("forgot-confirm-pin").value.trim();
+
+        if (person && person.question) {
+          const answer = document.getElementById("forgot-security-answer").value;
+          if (!checkSecurityAnswer(personId, answer, allPeople)) {
+            message.textContent = "Réponse incorrecte.";
+            message.style.display = "block";
+            return;
+          }
+        } else {
+          const recoveryCode = document.getElementById("forgot-recovery-code").value.trim();
+          if (recoveryCode !== FAMILY_RECOVERY_CODE) {
+            message.textContent = "Code de récupération incorrect.";
+            message.style.display = "block";
+            return;
+          }
+        }
+        if (!newPin) {
+          message.textContent = "Merci de saisir un nouveau code.";
+          message.style.display = "block";
+          return;
+        }
+        if (newPin !== confirmPin) {
+          message.textContent = "Les deux codes ne correspondent pas.";
+          message.style.display = "block";
+          return;
+        }
+
+        await postUpdatePin(personId, newPin);
+
+        message.style.color = "#28a745";
+        message.textContent = "Code mis à jour ! Tu peux te connecter avec ton nouveau code.";
+        message.style.display = "block";
+        document.getElementById("forgot-security-answer").value = "";
+        document.getElementById("forgot-recovery-code").value = "";
+        document.getElementById("forgot-new-pin").value = "";
+        document.getElementById("forgot-confirm-pin").value = "";
+      });
+    }
+
     async function initApp() {
       data = await loadAppData();
       renderOfflineBadge(data);
       renderSessionBox();
       renderPeopleGrid();
       setupPinForm();
+      renderForgotPersonSelect();
+      setupForgotPinForm();
+      updateForgotBlocks();
     }
 
     initApp();

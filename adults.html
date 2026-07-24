@@ -196,6 +196,19 @@
         <button id="change-pin-btn">Valider</button>
       </div>
     </div>
+
+    <div class="section">
+      <h3>Ma question secrète</h3>
+      <p class="small">
+        Sert à récupérer ton code tout seul si tu l'oublies (voir "Code oublié ?" sur la page de connexion).
+      </p>
+      <p id="security-question-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+        <input id="security-question-input" type="text" placeholder="Ta question" style="flex:2; padding:0.25rem;" />
+        <input id="security-answer-input" type="text" placeholder="Réponse" style="padding:0.25rem;" />
+        <button id="security-question-btn">Enregistrer</button>
+      </div>
+    </div>
   </div>
 
   <script src="shared.js"></script>
@@ -795,6 +808,7 @@
       }
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
+      setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();
