@@ -41,8 +41,12 @@ function getPersonDayState(personId) {
   if (!data.state[personId][dayKey]) {
     data.state[personId][dayKey] = {
       completedChores: [],
+      purchasedRewards: [],
       stars: 0
     };
+  }
+  if (!data.state[personId][dayKey].purchasedRewards) {
+    data.state[personId][dayKey].purchasedRewards = [];
   }
   return data.state[personId][dayKey];
 }

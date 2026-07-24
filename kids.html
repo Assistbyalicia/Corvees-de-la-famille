@@ -246,18 +246,30 @@
         const left = document.createElement("span");
         left.textContent = `${reward.label} (${reward.cost}⭐)`;
 
+        const purchased = childState.purchasedRewards.includes(reward.id);
+
         const btn = document.createElement("button");
-        btn.textContent = "Acheter";
-        btn.disabled = childState.stars < reward.cost;
+        btn.textContent = purchased ? "Annuler" : "Acheter";
+        btn.disabled = !purchased && childState.stars < reward.cost;
 
         btn.addEventListener("click", async () => {
           const state = getPersonDayState(data.activeChildId);
-          if (state.stars >= reward.cost) {
+          const index = state.purchasedRewards.indexOf(reward.id);
+
+          if (index === -1) {
+            if (state.stars < reward.cost) return;
             state.stars -= reward.cost;
+            state.purchasedRewards.push(reward.id);
             await postRewardAction(data.activeChildId, reward.id, "purchase");
             saveData(data);
             renderAll();
             alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
+          } else {
+            state.stars += reward.cost;
+            state.purchasedRewards.splice(index, 1);
+            await postRewardAction(data.activeChildId, reward.id, "cancel_purchase");
+            saveData(data);
+            renderAll();
           }
         });
 
