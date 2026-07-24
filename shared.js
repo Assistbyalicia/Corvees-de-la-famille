@@ -125,7 +125,7 @@ async function loadAppData() {
 
   try {
     const config = await fetchRemoteConfig();
-    return {
+    const merged = {
       ...defaultData,
       ...local,
       children: mergeById(config.children, local.children),
@@ -134,6 +134,13 @@ async function loadAppData() {
       rewards: mergeById(config.rewards, local.rewards),
       offline: false
     };
+    // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
+    // créée depuis l'appli perd son marquage "local" dès qu'elle apparaît dans
+    // Notion (elle est alors renvoyée telle quelle par la config, sans _source).
+    // Sans ça, l'ancienne entrée _source:"local" restait dans le localStorage
+    // et réapparaissait comme un fantôme même après suppression dans Notion.
+    saveData(merged);
+    return merged;
   } catch (e) {
     console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
     return { ...defaultData, ...local, offline: true };
