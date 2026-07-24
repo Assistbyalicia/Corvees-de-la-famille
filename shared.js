@@ -343,6 +343,27 @@ async function postUpdateSecurityQuestion(personId, question, answer) {
   }
 }
 
+// Câble un jeu d'onglets partagé (.tab-btn / .tab-panel, voir shared.css).
+// defaultTab (ex. "quetes") force l'onglet actif initial ; sinon c'est le
+// premier bouton présent dans le DOM qui est utilisé.
+function setupTabs(defaultTab) {
+  const buttons = Array.from(document.querySelectorAll(".tab-btn"));
+  const panels = Array.from(document.querySelectorAll(".tab-panel"));
+
+  function activate(tabName) {
+    buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabName));
+    panels.forEach(panel => panel.classList.toggle("active", panel.id === `tab-${tabName}`));
+  }
+
+  buttons.forEach(btn => {
+    btn.addEventListener("click", () => activate(btn.dataset.tab));
+  });
+
+  if (buttons.length > 0) {
+    activate(defaultTab || buttons[0].dataset.tab);
+  }
+}
+
 // Affiche/masque un bandeau "hors-ligne" si l'API de config n'a pas répondu.
 function renderOfflineBadge(data) {
   const badge = document.getElementById("offline-badge");

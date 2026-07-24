@@ -29,31 +29,6 @@
       background: #fafafa;
       font-weight: 600;
     }
-    .tabs {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
-    .tab-btn {
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      border: 1px solid #ddd;
-      background: #fafafa;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-    .tab-btn.active {
-      background: #007bff;
-      color: #fff;
-      border-color: #007bff;
-    }
-    .tab-panel {
-      display: none;
-    }
-    .tab-panel.active {
-      display: block;
-    }
     .people-picker {
       display: flex;
       gap: 0.5rem;
@@ -73,8 +48,13 @@
       color: #fff;
       border-color: #007bff;
     }
-    body.restricted .tabs,
     body.restricted .people-picker {
+      display: none;
+    }
+    body.restricted .tab-btn[data-tab="enfants"],
+    body.restricted .tab-btn[data-tab="corvees"],
+    body.restricted .tab-btn[data-tab="recompenses"],
+    body.restricted .tab-btn[data-tab="codes"] {
       display: none;
     }
   </style>
@@ -105,6 +85,7 @@
       <button class="tab-btn" data-tab="corvees">Corvées</button>
       <button class="tab-btn" data-tab="recompenses">Récompenses</button>
       <button class="tab-btn" data-tab="codes">Codes</button>
+      <button class="tab-btn" data-tab="compte">Mon compte</button>
     </div>
 
     <div class="tab-panel" id="tab-enfants">
@@ -186,27 +167,29 @@
       </div>
     </div>
 
-    <div class="section">
-      <h3>Changer mon code</h3>
-      <p id="change-pin-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-        <input id="change-pin-current" type="password" inputmode="numeric" placeholder="Code actuel" style="padding:0.25rem;" />
-        <input id="change-pin-new" type="password" inputmode="numeric" placeholder="Nouveau code" style="padding:0.25rem;" />
-        <input id="change-pin-confirm" type="password" inputmode="numeric" placeholder="Confirmer" style="padding:0.25rem;" />
-        <button id="change-pin-btn">Valider</button>
+    <div class="tab-panel" id="tab-compte">
+      <div class="section">
+        <h3>Changer mon code</h3>
+        <p id="change-pin-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+          <input id="change-pin-current" type="password" inputmode="numeric" placeholder="Code actuel" style="padding:0.25rem;" />
+          <input id="change-pin-new" type="password" inputmode="numeric" placeholder="Nouveau code" style="padding:0.25rem;" />
+          <input id="change-pin-confirm" type="password" inputmode="numeric" placeholder="Confirmer" style="padding:0.25rem;" />
+          <button id="change-pin-btn">Valider</button>
+        </div>
       </div>
-    </div>
 
-    <div class="section">
-      <h3>Ma question secrète</h3>
-      <p class="small">
-        Sert à récupérer ton code tout seul si tu l'oublies (voir "Code oublié ?" sur la page de connexion).
-      </p>
-      <p id="security-question-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-        <input id="security-question-input" type="text" placeholder="Ta question" style="flex:2; padding:0.25rem;" />
-        <input id="security-answer-input" type="text" placeholder="Réponse" style="padding:0.25rem;" />
-        <button id="security-question-btn">Enregistrer</button>
+      <div class="section">
+        <h3>Ma question secrète</h3>
+        <p class="small">
+          Sert à récupérer ton code tout seul si tu l'oublies (voir "Code oublié ?" sur la page de connexion).
+        </p>
+        <p id="security-question-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+          <input id="security-question-input" type="text" placeholder="Ta question" style="flex:2; padding:0.25rem;" />
+          <input id="security-answer-input" type="text" placeholder="Réponse" style="padding:0.25rem;" />
+          <button id="security-question-btn">Enregistrer</button>
+        </div>
       </div>
     </div>
   </div>
@@ -216,28 +199,12 @@
     let data = null;
     let session = null;
 
-    // Vue réduite pour un adulte non-admin : uniquement sa propre section,
-    // pas d'onglets, pas d'accès aux enfants/corvées/récompenses globales.
+    // Vue réduite pour un adulte non-admin : uniquement sa propre section et
+    // "Mon compte", pas d'accès aux enfants/corvées/récompenses/codes globaux
+    // (masqués en CSS via body.restricted, voir le <style> plus haut).
     function setupRestrictedView() {
       document.body.classList.add("restricted");
-      document.getElementById("tab-adultes").classList.add("active");
       renderAdultsSections();
-    }
-
-    function setupTabs() {
-      const buttons = Array.from(document.querySelectorAll(".tab-btn"));
-      const panels = Array.from(document.querySelectorAll(".tab-panel"));
-
-      function activate(tabName) {
-        buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabName));
-        panels.forEach(panel => panel.classList.toggle("active", panel.id === `tab-${tabName}`));
-      }
-
-      buttons.forEach(btn => {
-        btn.addEventListener("click", () => activate(btn.dataset.tab));
-      });
-
-      activate(buttons[0].dataset.tab);
     }
 
     function renderChildrenTable() {
@@ -804,6 +771,7 @@
         setupAddRewardForm();
       } else {
         data.activeAdultId = session.personId;
+        setupTabs("adultes");
         setupRestrictedView();
       }
 
