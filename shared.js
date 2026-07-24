@@ -124,3 +124,41 @@ async function postRewardAction(personId, rewardId, action) {
     console.warn("Impossible de journaliser la récompense dans Notion :", e);
   }
 }
+
+// action: "add_chore" — crée la corvée dans Notion pour qu'elle soit reconnue
+// par l'automatisation (et visible depuis les autres appareils).
+async function postAddChore(choreId, label, stars, personId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_chore",
+        choreId,
+        label,
+        stars,
+        personId
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de créer la corvée dans Notion :", e);
+  }
+}
+
+// action: "add_reward" — crée la récompense dans Notion.
+async function postAddReward(rewardId, label, cost) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_reward",
+        rewardId,
+        label,
+        cost
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de créer la récompense dans Notion :", e);
+  }
+}

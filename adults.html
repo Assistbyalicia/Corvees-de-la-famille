@@ -276,7 +276,7 @@
         selectPerson.appendChild(opt);
       });
 
-      btnAdd.addEventListener("click", () => {
+      btnAdd.addEventListener("click", async () => {
         const label = inputLabel.value.trim();
         const stars = parseInt(inputStars.value, 10) || 1;
         const personId = selectPerson.value;
@@ -301,6 +301,8 @@
 
         inputLabel.value = "";
         inputStars.value = "1";
+
+        await postAddChore(newId, label, stars, personId);
       });
     }
 
@@ -320,7 +322,7 @@
         selectChild.appendChild(opt);
       });
 
-      btnAdd.addEventListener("click", () => {
+      btnAdd.addEventListener("click", async () => {
         const label = inputLabel.value.trim();
         const cost = parseInt(inputCost.value, 10) || 1;
         const childId = selectChild.value;
@@ -347,6 +349,8 @@
 
         inputLabel.value = "";
         inputCost.value = "1";
+
+        await postAddReward(newId, label, cost);
       });
     }
 
