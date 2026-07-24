@@ -62,6 +62,21 @@ select {
   border-radius: 0.25rem;
 }
 
+.assign-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.assign-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: #444;
+  white-space: nowrap;
+}
+
 .offline-banner {
   display: none;
   background: #fff3cd;

@@ -133,8 +133,9 @@ async function postRewardAction(personId, rewardId, action) {
 }
 
 // action: "add_chore" — crée la corvée dans Notion pour qu'elle soit reconnue
-// par l'automatisation (et visible depuis les autres appareils).
-async function postAddChore(choreId, label, stars, personId) {
+// par l'automatisation (et visible depuis les autres appareils). personIds
+// est un tableau (une corvée peut être assignée à plusieurs personnes).
+async function postAddChore(choreId, label, stars, personIds) {
   try {
     await fetch(API_COMPLETE_URL, {
       method: "POST",
@@ -144,7 +145,7 @@ async function postAddChore(choreId, label, stars, personId) {
         choreId,
         label,
         stars,
-        personId
+        personIds
       })
     });
   } catch (e) {
@@ -152,8 +153,8 @@ async function postAddChore(choreId, label, stars, personId) {
   }
 }
 
-// action: "add_reward" — crée la récompense dans Notion.
-async function postAddReward(rewardId, label, cost, personId) {
+// action: "add_reward" — crée la récompense dans Notion. personIds est un tableau.
+async function postAddReward(rewardId, label, cost, personIds) {
   try {
     await fetch(API_COMPLETE_URL, {
       method: "POST",
@@ -163,11 +164,46 @@ async function postAddReward(rewardId, label, cost, personId) {
         rewardId,
         label,
         cost,
-        personId
+        personIds
       })
     });
   } catch (e) {
     console.warn("Impossible de créer la récompense dans Notion :", e);
+  }
+}
+
+// action: "update_chore_assignment" — remplace la liste de personnes assignées
+// à une corvée existante (relation "Assignée à" côté Notion).
+async function postUpdateChoreAssignment(choreId, personIds) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_chore_assignment",
+        choreId,
+        personIds
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour l'assignation de la corvée dans Notion :", e);
+  }
+}
+
+// action: "update_reward_assignment" — idem pour une récompense.
+async function postUpdateRewardAssignment(rewardId, personIds) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_reward_assignment",
+        rewardId,
+        personIds
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour l'assignation de la récompense dans Notion :", e);
   }
 }
 

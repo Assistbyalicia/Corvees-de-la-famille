@@ -137,14 +137,15 @@
       <div class="section">
         <h3>Ajouter une corvée</h3>
         <p class="small">
-          Crée une nouvelle corvée et assigne-la à une personne (enfant ou adulte).
+          Crée une nouvelle corvée et assigne-la à une ou plusieurs personnes
+          (laisse tout décoché pour la rendre visible par tout le monde).
         </p>
-        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; align-items:center;">
           <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
           <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
-          <select id="new-chore-person" style="padding:0.25rem;"></select>
-          <button id="add-chore-btn">Ajouter</button>
         </div>
+        <div class="assign-checkboxes" id="new-chore-people" style="margin-top:0.5rem;"></div>
+        <button id="add-chore-btn" style="margin-top:0.5rem;">Ajouter</button>
       </div>
     </div>
 
@@ -157,14 +158,15 @@
       <div class="section">
         <h3>Ajouter une récompense</h3>
         <p class="small">
-          Crée une récompense réservée à une personne précise (enfant ou adulte).
+          Crée une récompense réservée à une ou plusieurs personnes
+          (laisse tout décoché pour la rendre visible par tout le monde).
         </p>
-        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; align-items:center;">
           <input id="new-reward-label" type="text" placeholder="Nom de la récompense" style="flex:2; padding:0.25rem;" />
           <input id="new-reward-cost" type="number" min="1" max="50" value="1" style="width:80px; padding:0.25rem;" />
-          <select id="new-reward-person" style="padding:0.25rem;"></select>
-          <button id="add-reward-btn">Ajouter</button>
         </div>
+        <div class="assign-checkboxes" id="new-reward-people" style="margin-top:0.5rem;"></div>
+        <button id="add-reward-btn" style="margin-top:0.5rem;">Ajouter</button>
       </div>
     </div>
   </div>
@@ -424,6 +426,31 @@
       container.appendChild(rewardsList);
     }
 
+    // Construit un groupe de cases à cocher (une par personne) reflétant selectedIds.
+    // onToggle(personId, checked) est appelé à chaque changement.
+    function buildPersonCheckboxes(container, people, selectedIds, onToggle) {
+      container.innerHTML = "";
+      people.forEach(person => {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = person.id;
+        input.checked = selectedIds.includes(person.id);
+        if (onToggle) {
+          input.addEventListener("change", () => onToggle(person.id, input.checked));
+        }
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(person.name));
+        container.appendChild(label);
+      });
+    }
+
+    function getCheckedPersonIds(container) {
+      return Array.from(container.querySelectorAll("input[type=checkbox]:checked")).map(
+        cb => cb.value
+      );
+    }
+
     function renderChoresList() {
       const list = document.getElementById("chores-list");
       if (!list) return;
@@ -434,17 +461,31 @@
       (data.chores || []).forEach(chore => {
         const li = document.createElement("li");
 
-        const assignedNames = (chore.assignedTo || [])
-          .map(id => {
-            const person = allPeople.find(p => p.id === id);
-            return person ? person.name : id;
-          })
-          .join(", ");
-
         const left = document.createElement("span");
-        left.textContent = assignedNames
-          ? `${chore.label} (${chore.stars}⭐) — ${assignedNames}`
-          : `${chore.label} (${chore.stars}⭐) — tout le monde`;
+        left.textContent = `${chore.label} (${chore.stars}⭐)`;
+
+        const right = document.createElement("div");
+        right.style.display = "flex";
+        right.style.alignItems = "center";
+        right.style.gap = "0.75rem";
+        right.style.flexWrap = "wrap";
+
+        const checkboxes = document.createElement("div");
+        checkboxes.className = "assign-checkboxes";
+
+        buildPersonCheckboxes(checkboxes, allPeople, chore.assignedTo || [], async (personId, checked) => {
+          chore.assignedTo = chore.assignedTo || [];
+          const idx = chore.assignedTo.indexOf(personId);
+          if (checked && idx === -1) {
+            chore.assignedTo.push(personId);
+          } else if (!checked && idx !== -1) {
+            chore.assignedTo.splice(idx, 1);
+          }
+          saveData(data);
+          renderChildrenTable();
+          renderAdultsSections();
+          await postUpdateChoreAssignment(chore.id, chore.assignedTo);
+        });
 
         const btn = document.createElement("button");
         btn.textContent = "Supprimer";
@@ -461,8 +502,11 @@
           }
         });
 
+        right.appendChild(checkboxes);
+        right.appendChild(btn);
+
         li.appendChild(left);
-        li.appendChild(btn);
+        li.appendChild(right);
         list.appendChild(li);
       });
 
@@ -483,17 +527,30 @@
       (data.rewards || []).forEach(reward => {
         const li = document.createElement("li");
 
-        const assignedNames = (reward.assignedTo || [])
-          .map(id => {
-            const person = allPeople.find(p => p.id === id);
-            return person ? person.name : id;
-          })
-          .join(", ");
-
         const left = document.createElement("span");
-        left.textContent = assignedNames
-          ? `${reward.label} (${reward.cost}⭐) — ${assignedNames}`
-          : `${reward.label} (${reward.cost}⭐) — tout le monde`;
+        left.textContent = `${reward.label} (${reward.cost}⭐)`;
+
+        const right = document.createElement("div");
+        right.style.display = "flex";
+        right.style.alignItems = "center";
+        right.style.gap = "0.75rem";
+        right.style.flexWrap = "wrap";
+
+        const checkboxes = document.createElement("div");
+        checkboxes.className = "assign-checkboxes";
+
+        buildPersonCheckboxes(checkboxes, allPeople, reward.assignedTo || [], async (personId, checked) => {
+          reward.assignedTo = reward.assignedTo || [];
+          const idx = reward.assignedTo.indexOf(personId);
+          if (checked && idx === -1) {
+            reward.assignedTo.push(personId);
+          } else if (!checked && idx !== -1) {
+            reward.assignedTo.splice(idx, 1);
+          }
+          saveData(data);
+          renderAdultsSections();
+          await postUpdateRewardAssignment(reward.id, reward.assignedTo);
+        });
 
         const btn = document.createElement("button");
         btn.textContent = "Supprimer";
@@ -509,8 +566,11 @@
           }
         });
 
+        right.appendChild(checkboxes);
+        right.appendChild(btn);
+
         li.appendChild(left);
-        li.appendChild(btn);
+        li.appendChild(right);
         list.appendChild(li);
       });
 
@@ -522,39 +582,33 @@
     }
 
     function setupAddChoreForm() {
-      const selectPerson = document.getElementById("new-chore-person");
+      const peopleContainer = document.getElementById("new-chore-people");
       const btnAdd = document.getElementById("add-chore-btn");
       const inputLabel = document.getElementById("new-chore-label");
       const inputStars = document.getElementById("new-chore-stars");
 
-      if (!selectPerson || !btnAdd || !inputLabel || !inputStars) return;
+      if (!peopleContainer || !btnAdd || !inputLabel || !inputStars) return;
 
-      selectPerson.innerHTML = "";
       const allPeople = [...(data.children || []), ...(data.adults || [])];
-      allPeople.forEach(person => {
-        const opt = document.createElement("option");
-        opt.value = person.id;
-        opt.textContent = person.name;
-        selectPerson.appendChild(opt);
-      });
+      buildPersonCheckboxes(peopleContainer, allPeople, []);
 
       btnAdd.addEventListener("click", async () => {
         const label = inputLabel.value.trim();
         const stars = parseInt(inputStars.value, 10) || 1;
-        const personId = selectPerson.value;
+        const personIds = getCheckedPersonIds(peopleContainer);
 
         if (!label) {
           alert("Merci de saisir un nom de corvée.");
           return;
         }
 
-        const newId = `${personId}-${label.toLowerCase().replace(/\s+/g, "-")}`;
+        const newId = `${label.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
 
         (data.chores || (data.chores = [])).push({
           id: newId,
           label,
           stars,
-          assignedTo: [personId],
+          assignedTo: personIds,
           _source: "local"
         });
 
@@ -565,49 +619,40 @@
 
         inputLabel.value = "";
         inputStars.value = "1";
+        buildPersonCheckboxes(peopleContainer, allPeople, []);
 
-        await postAddChore(newId, label, stars, personId);
+        await postAddChore(newId, label, stars, personIds);
       });
     }
 
     function setupAddRewardForm() {
-      const selectPerson = document.getElementById("new-reward-person");
+      const peopleContainer = document.getElementById("new-reward-people");
       const btnAdd = document.getElementById("add-reward-btn");
       const inputLabel = document.getElementById("new-reward-label");
       const inputCost = document.getElementById("new-reward-cost");
 
-      if (!selectPerson || !btnAdd || !inputLabel || !inputCost) return;
+      if (!peopleContainer || !btnAdd || !inputLabel || !inputCost) return;
 
-      selectPerson.innerHTML = "";
       const allPeople = [...(data.children || []), ...(data.adults || [])];
-      allPeople.forEach(person => {
-        const opt = document.createElement("option");
-        opt.value = person.id;
-        opt.textContent = person.name;
-        selectPerson.appendChild(opt);
-      });
+      buildPersonCheckboxes(peopleContainer, allPeople, []);
 
       btnAdd.addEventListener("click", async () => {
         const label = inputLabel.value.trim();
         const cost = parseInt(inputCost.value, 10) || 1;
-        const personId = selectPerson.value;
+        const personIds = getCheckedPersonIds(peopleContainer);
 
         if (!label) {
           alert("Merci de saisir un nom de récompense.");
           return;
         }
-        if (!personId) {
-          alert("Merci de sélectionner une personne.");
-          return;
-        }
 
-        const newId = `${personId}-${label.toLowerCase().replace(/\s+/g, "-")}`;
+        const newId = `${label.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
 
         (data.rewards || (data.rewards = [])).push({
           id: newId,
           label,
           cost,
-          assignedTo: [personId],
+          assignedTo: personIds,
           _source: "local"
         });
 
@@ -617,8 +662,9 @@
 
         inputLabel.value = "";
         inputCost.value = "1";
+        buildPersonCheckboxes(peopleContainer, allPeople, []);
 
-        await postAddReward(newId, label, cost, personId);
+        await postAddReward(newId, label, cost, personIds);
       });
     }
 
