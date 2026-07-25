@@ -593,15 +593,23 @@ function getSharedGardeLocation(date, overrides) {
 
   if (date >= gvStart && date < gvRentree) {
     const dow = date.getDay();
-    if (dow === 5 || dow === 6 || dow === 0) {
-      return { parent: gardeNormalWeekendParent(date), period: "Grandes vacances", label: "Grandes vacances (week-end)" };
-    }
+    // Entre la fin des cours et le début du 1er bloc plein (l'extrémité de
+    // début de vacances), le week-end suit encore l'alternance normale.
     if (date < gvAnchorStart) {
+      if (dow === 5 || dow === 6 || dow === 0) {
+        return { parent: gardeNormalWeekendParent(date), period: "Grandes vacances", label: "Grandes vacances (week-end)" };
+      }
       return { parent: null, period: "Grandes vacances", label: "Grandes vacances" };
     }
+    // À partir du 1er bloc plein, chaque bloc dure exactement 2 semaines :
+    // les week-ends internes à un bloc restent chez le même parent que le
+    // reste de la semaine (ils ne suivent plus l'alternance normale).
     const blockIndex = Math.floor(gardeDaysBetween(gvAnchorStart, date) / GARDE_GRANDES_VACANCES.blockLengthDays);
     const parent = (blockIndex % 2 === 0) ? GARDE_GRANDES_VACANCES.firstBlockParent : gardeOpposite(GARDE_GRANDES_VACANCES.firstBlockParent);
-    return { parent, period: "Grandes vacances", label: `Grandes vacances — semaine ${blockIndex + 1}` };
+    const label = (dow === 5 || dow === 6 || dow === 0)
+      ? `Grandes vacances — semaine ${blockIndex + 1} (week-end)`
+      : `Grandes vacances — semaine ${blockIndex + 1}`;
+    return { parent, period: "Grandes vacances", label };
   }
 
   for (const v of GARDE_PETITES_VACANCES) {

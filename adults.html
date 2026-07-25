@@ -42,6 +42,97 @@
     body.restricted .people-picker {
       display: none;
     }
+    /* Le planning de garde reste visible (lecture seule) pour tous les
+       adultes, contrairement aux autres people-picker qui sont dans des
+       sections réservées aux admins. */
+    body.restricted #garde-child-picker {
+      display: flex;
+    }
+
+    .garde-legend {
+      display: flex;
+      gap: 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.85rem;
+      align-items: center;
+    }
+    .garde-legend .dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .garde-month {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow-card);
+    }
+    .garde-month h3 {
+      margin: 0 0 0.6rem;
+      font-size: 0.95rem;
+      text-transform: capitalize;
+      color: var(--color-primary);
+    }
+    .garde-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+    }
+    .garde-dow {
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      padding-bottom: 2px;
+    }
+    .garde-cell {
+      aspect-ratio: 1;
+      border-radius: 9px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      transition: transform 0.12s ease;
+    }
+    .garde-cell .who {
+      font-size: 1.05rem;
+      line-height: 1;
+      margin-top: 1px;
+    }
+    .garde-cell.maman {
+      background: #F76E9C;
+      color: #fff;
+    }
+    .garde-cell.papa {
+      background: #4A90E2;
+      color: #fff;
+    }
+    .garde-cell.none {
+      background: #FAF9FF;
+      border: 1px solid var(--color-border);
+      color: var(--color-text-muted);
+    }
+    .garde-cell.today {
+      box-shadow: 0 0 0 3px var(--color-primary);
+    }
+    .garde-cell.overridden {
+      outline: 2px dashed rgba(255, 255, 255, 0.85);
+      outline-offset: -4px;
+    }
+    .garde-cell.clickable {
+      cursor: pointer;
+    }
+    .garde-cell.clickable:hover {
+      transform: translateY(-2px);
+    }
     body.restricted .tab-btn[data-tab="enfants"],
     body.restricted .tab-btn[data-tab="corvees"],
     body.restricted .tab-btn[data-tab="recompenses"],
@@ -209,9 +300,9 @@
           <span id="garde-admin-hint" style="display:none;">Clique sur un jour pour forcer une exception (Maman → Papa → auto).</span>
         </p>
         <div class="people-picker" id="garde-child-picker"></div>
-        <div style="display:flex; gap:14px; margin:0.75rem 0; font-size:0.85rem;">
-          <span>👩 Chez Maman</span>
-          <span>👨 Chez Papa</span>
+        <div class="garde-legend">
+          <span><i class="dot" style="background:#F76E9C;"></i>Chez Maman</span>
+          <span><i class="dot" style="background:#4A90E2;"></i>Chez Papa</span>
         </div>
         <div id="garde-months"></div>
       </div>
@@ -424,24 +515,18 @@
         const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
 
         const box = document.createElement("div");
-        box.style.marginBottom = "1.25rem";
+        box.className = "garde-month";
 
         const title = document.createElement("h3");
-        title.style.textTransform = "capitalize";
-        title.style.fontSize = "0.95rem";
-        title.style.margin = "0 0 0.5rem";
         title.textContent = monthFmt.format(monthDate);
         box.appendChild(title);
 
         const grid = document.createElement("div");
-        grid.style.display = "grid";
-        grid.style.gridTemplateColumns = "repeat(7, 1fr)";
-        grid.style.gap = "5px";
+        grid.className = "garde-grid";
 
         dowFmt.forEach(dw => {
           const cell = document.createElement("div");
-          cell.className = "small";
-          cell.style.textAlign = "center";
+          cell.className = "garde-dow";
           cell.textContent = dw;
           grid.appendChild(cell);
         });
@@ -459,28 +544,9 @@
 
           const cell = document.createElement("div");
           cell.title = loc.label;
-          cell.style.aspectRatio = "1";
-          cell.style.borderRadius = "9px";
-          cell.style.display = "flex";
-          cell.style.flexDirection = "column";
-          cell.style.alignItems = "center";
-          cell.style.justifyContent = "center";
-          cell.style.fontSize = "0.8rem";
-          cell.style.fontWeight = "600";
-
-          if (loc.parent === "maman") {
-            cell.style.background = "#F76E9C";
-            cell.style.color = "#fff";
-          } else if (loc.parent === "papa") {
-            cell.style.background = "#4A90E2";
-            cell.style.color = "#fff";
-          } else {
-            cell.style.background = "#FAF9FF";
-            cell.style.border = "1px solid var(--color-border)";
-            cell.style.color = "var(--color-text-muted)";
-          }
-          if (isToday) cell.style.boxShadow = "0 0 0 3px var(--color-primary)";
-          if (loc.overridden) cell.style.outline = "2px dashed rgba(255,255,255,0.85)";
+          cell.className = "garde-cell " + (loc.parent || "none");
+          if (isToday) cell.classList.add("today");
+          if (loc.overridden) cell.classList.add("overridden");
 
           const num = document.createElement("span");
           num.textContent = day;
@@ -488,14 +554,13 @@
 
           if (loc.parent) {
             const who = document.createElement("span");
-            who.style.fontSize = "1rem";
-            who.style.lineHeight = "1";
+            who.className = "who";
             who.textContent = GARDE_PARENT_DISPLAY[loc.parent].emoji;
             cell.appendChild(who);
           }
 
           if (session.isAdmin) {
-            cell.style.cursor = "pointer";
+            cell.classList.add("clickable");
             cell.addEventListener("click", () => {
               cycleGardeOverride(dateKey, isForced, overrides[dateKey]);
             });
