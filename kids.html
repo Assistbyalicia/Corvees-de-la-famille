@@ -72,7 +72,10 @@
   </div>
 
   <div class="tabs" id="tabs">
-    <button class="tab-btn" data-tab="quetes">Mes quêtes</button>
+    <button class="tab-btn" data-tab="quetes">
+      Mes quêtes
+      <span id="quetes-tab-badge" class="tab-badge" style="display:none;"></span>
+    </button>
     <button class="tab-btn" data-tab="recap">Récap</button>
     <button class="tab-btn" data-tab="compte">Mon compte</button>
   </div>
@@ -221,6 +224,34 @@
 
       progressText.textContent = `${completed} / ${total} corvées complétées`;
       progressFill.style.width = `${ratio}%`;
+    }
+
+    function renderQuetesBadge() {
+      const badge = document.getElementById("quetes-tab-badge");
+      if (!badge) return;
+
+      if (!data.activeChildId) {
+        badge.style.display = "none";
+        return;
+      }
+
+      const childState = getPersonDayState(data.activeChildId);
+      const choresForChild = (data.chores || []).filter(chore => {
+        if (!isChoreVisibleToday(chore)) return false;
+        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+        return chore.assignedTo.includes(data.activeChildId);
+      });
+
+      const remaining = choresForChild.filter(
+        chore => !childState.completedChores.includes(chore.id)
+      ).length;
+
+      if (remaining > 0) {
+        badge.textContent = remaining;
+        badge.style.display = "block";
+      } else {
+        badge.style.display = "none";
+      }
     }
 
     function renderTotalStars() {
@@ -456,6 +487,7 @@
     function renderAll() {
       renderChildren();
       renderProgress();
+      renderQuetesBadge();
       renderTotalStars();
       renderStreak();
       renderChores();

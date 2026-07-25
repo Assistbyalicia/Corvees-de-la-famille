@@ -125,6 +125,12 @@
       </div>
 
       <div class="section">
+        <h3>Historique des corvées complétées</h3>
+        <p class="small">Les 30 dernières corvées complétées, tous enfants confondus.</p>
+        <ul class="list" id="chore-history-list"></ul>
+      </div>
+
+      <div class="section">
         <h3>Ajouter une corvée</h3>
         <p class="small">
           Crée une nouvelle corvée et assigne-la à une ou plusieurs personnes
@@ -728,6 +734,7 @@
         btn.textContent = "Supprimer";
 
         btn.addEventListener("click", async () => {
+          if (!confirm(`Supprimer la corvée « ${chore.label} » ?`)) return;
           const index = (data.chores || []).indexOf(chore);
           if (index !== -1) {
             data.chores.splice(index, 1);
@@ -839,6 +846,7 @@
         btn.textContent = "Supprimer";
 
         btn.addEventListener("click", async () => {
+          if (!confirm(`Supprimer la récompense « ${reward.label} » ?`)) return;
           const index = (data.rewards || []).indexOf(reward);
           if (index !== -1) {
             data.rewards.splice(index, 1);
@@ -931,6 +939,7 @@
         rejectBtn.textContent = "Refuser";
 
         rejectBtn.addEventListener("click", async () => {
+          if (!confirm(`Refuser la proposition « ${reward.label} » ?`)) return;
           const index = (data.rewards || []).indexOf(reward);
           if (index !== -1) {
             data.rewards.splice(index, 1);
@@ -991,6 +1000,37 @@
       if (history.length === 0) {
         const li = document.createElement("li");
         li.textContent = "Aucun achat pour le moment.";
+        list.appendChild(li);
+      }
+    }
+
+    function renderChoreHistory() {
+      const list = document.getElementById("chore-history-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const history = data.choreHistory || [];
+
+      history.forEach(entry => {
+        const li = document.createElement("li");
+
+        const person = allPeople.find(p => p.id === entry.personId);
+        const left = document.createElement("span");
+        left.textContent = `${formatRewardHistoryDate(entry.date)} — ${person ? person.name : entry.personId} a fait « ${entry.choreLabel} »`;
+
+        const stars = document.createElement("span");
+        stars.className = "badge";
+        stars.textContent = `+${entry.stars}⭐`;
+
+        li.appendChild(left);
+        li.appendChild(stars);
+        list.appendChild(li);
+      });
+
+      if (history.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune corvée complétée pour le moment.";
         list.appendChild(li);
       }
     }
@@ -1203,6 +1243,7 @@
         renderAdultsPicker();
         renderAdultsSections();
         renderChoresList();
+        renderChoreHistory();
         renderRewardsList();
         renderProposedRewardsList();
         renderRewardHistory();

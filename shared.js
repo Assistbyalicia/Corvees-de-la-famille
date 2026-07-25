@@ -79,6 +79,7 @@ const defaultData = {
   rewards: [],
   weeklyRecap: { days: [] },
   rewardHistory: [],
+  choreHistory: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -161,6 +162,7 @@ async function loadAppData() {
       rewards: mergeById(config.rewards, local.rewards),
       weeklyRecap: config.weeklyRecap || { days: [] },
       rewardHistory: config.rewardHistory || [],
+      choreHistory: config.choreHistory || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
