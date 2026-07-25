@@ -69,6 +69,7 @@ const defaultData = {
   adults: [],
   chores: [],
   rewards: [],
+  weeklyRecap: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -149,6 +150,7 @@ async function loadAppData() {
       adults: mergeById(config.adults, local.adults),
       chores: mergeById(config.chores, local.chores),
       rewards: mergeById(config.rewards, local.rewards),
+      weeklyRecap: config.weeklyRecap || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -340,6 +342,44 @@ async function postUpdateSecurityQuestion(personId, question, answer) {
     });
   } catch (e) {
     console.warn("Impossible de mettre à jour la question secrète dans Notion :", e);
+  }
+}
+
+// Affiche le classement des 7 derniers jours (data.weeklyRecap, calculé côté
+// n8n à partir du Journal Notion) dans la liste #containerId. highlightPersonId
+// (optionnel) met en valeur la ligne de cette personne.
+function renderWeeklyRecap(containerId, data, highlightPersonId) {
+  const list = document.getElementById(containerId);
+  if (!list) return;
+  list.innerHTML = "";
+
+  const recap = data.weeklyRecap || [];
+  const medals = ["🥇", "🥈", "🥉"];
+
+  recap.forEach((entry, index) => {
+    const li = document.createElement("li");
+    if (entry.id === highlightPersonId) {
+      li.style.borderColor = "var(--color-primary)";
+      li.style.background = "#F3F0FD";
+    }
+
+    const left = document.createElement("span");
+    const prefix = medals[index] || `${index + 1}.`;
+    left.textContent = `${prefix} ${entry.name}`;
+
+    const right = document.createElement("span");
+    right.className = "badge";
+    right.textContent = `⭐ ${entry.points}`;
+
+    li.appendChild(left);
+    li.appendChild(right);
+    list.appendChild(li);
+  });
+
+  if (recap.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "Pas encore de corvées cette semaine.";
+    list.appendChild(li);
   }
 }
 

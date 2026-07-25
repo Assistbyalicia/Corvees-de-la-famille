@@ -91,6 +91,7 @@
       <button class="tab-btn" data-tab="corvees">Corvées</button>
       <button class="tab-btn" data-tab="recompenses">Récompenses</button>
       <button class="tab-btn" data-tab="codes">Codes</button>
+      <button class="tab-btn" data-tab="recap">Récap</button>
       <button class="tab-btn" data-tab="compte">Mon compte</button>
     </div>
 
@@ -170,6 +171,14 @@
           Consulte ou réinitialise le code de quelqu'un qui l'a oublié.
         </p>
         <ul class="list" id="codes-list"></ul>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-recap">
+      <div class="section">
+        <h2>🏆 Classement de la semaine</h2>
+        <p class="small">Total des étoiles gagnées ces 7 derniers jours (enfants et adultes).</p>
+        <ul class="list" id="recap-list"></ul>
       </div>
     </div>
 
@@ -778,12 +787,14 @@
         renderChoresList();
         renderRewardsList();
         renderCodesList();
+        renderWeeklyRecap("recap-list", data);
         setupAddChoreForm();
         setupAddRewardForm();
       } else {
         data.activeAdultId = session.personId;
         setupTabs("adultes");
         setupRestrictedView();
+        renderWeeklyRecap("recap-list", data, session.personId);
       }
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
