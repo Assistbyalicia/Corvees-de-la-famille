@@ -97,6 +97,13 @@
           <tbody></tbody>
         </table>
       </div>
+
+      <div class="section">
+        <h2>Détail par enfant</h2>
+        <p class="small">Sélectionne un enfant pour voir ses corvées faites et à faire aujourd'hui.</p>
+        <div class="people-picker" id="children-detail-picker"></div>
+        <div id="children-detail-sections"></div>
+      </div>
     </div>
 
     <div class="tab-panel" id="tab-adultes">
@@ -283,6 +290,87 @@
         tr.appendChild(td);
         tbody.appendChild(tr);
       }
+    }
+
+    // Sélection d'enfant pour le détail des corvées (indépendante de
+    // data.activeChildId, qui sert à autre chose sur kids.html — on ne veut
+    // pas que regarder le détail d'un enfant ici change l'enfant actif ailleurs).
+    let activeChildDetailId = null;
+
+    function renderChildrenDetailPicker() {
+      const container = document.getElementById("children-detail-picker");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const children = data.children || [];
+      if (!activeChildDetailId && children.length > 0) {
+        activeChildDetailId = children[0].id;
+      }
+
+      children.forEach(child => {
+        const btn = document.createElement("button");
+        btn.className = "person-chip" + (child.id === activeChildDetailId ? " active" : "");
+        btn.textContent = child.name;
+        btn.addEventListener("click", () => {
+          activeChildDetailId = child.id;
+          renderChildrenDetailPicker();
+          renderChildrenDetailSections();
+        });
+        container.appendChild(btn);
+      });
+
+      if (children.length === 0) {
+        const span = document.createElement("span");
+        span.textContent = "Aucun enfant configuré.";
+        container.appendChild(span);
+      }
+    }
+
+    function renderChildrenDetailSections() {
+      const container = document.getElementById("children-detail-sections");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const children = data.children || [];
+      if (children.length === 0) return;
+
+      const child = children.find(c => c.id === activeChildDetailId) || children[0];
+      activeChildDetailId = child.id;
+
+      const state = getPersonDayState(child.id);
+
+      const choresForChild = (data.chores || []).filter(chore => {
+        if (!isChoreVisibleToday(chore)) return false;
+        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
+        return chore.assignedTo.includes(child.id);
+      });
+
+      const list = document.createElement("ul");
+      list.className = "list";
+
+      choresForChild.forEach(chore => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+
+        const completed = state.completedChores.includes(chore.id);
+        const status = document.createElement("span");
+        status.className = "badge";
+        status.textContent = completed ? "Faite" : "À faire";
+
+        li.appendChild(left);
+        li.appendChild(status);
+        list.appendChild(li);
+      });
+
+      if (choresForChild.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
+        list.appendChild(li);
+      }
+
+      container.appendChild(list);
     }
 
     function renderAdultsPicker() {
@@ -1008,6 +1096,8 @@
         }
         setupTabs();
         renderChildrenTable();
+        renderChildrenDetailPicker();
+        renderChildrenDetailSections();
         renderAdultsPicker();
         renderAdultsSections();
         renderChoresList();
