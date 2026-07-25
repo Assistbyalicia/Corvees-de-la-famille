@@ -628,8 +628,50 @@
         const li = document.createElement("li");
         li.style.flexWrap = "wrap";
 
-        const left = document.createElement("span");
-        left.textContent = `${chore.label} (${chore.stars}⭐)`;
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.alignItems = "center";
+        left.style.gap = "0.3rem";
+        left.style.flex = "2";
+        left.style.minWidth = "160px";
+
+        const labelInput = document.createElement("input");
+        labelInput.type = "text";
+        labelInput.value = chore.label;
+        labelInput.style.flex = "2";
+        labelInput.style.padding = "0.25rem";
+
+        const starsInput = document.createElement("input");
+        starsInput.type = "number";
+        starsInput.min = "1";
+        starsInput.max = "10";
+        starsInput.value = chore.stars;
+        starsInput.style.width = "55px";
+        starsInput.style.padding = "0.25rem";
+
+        async function submitDetailsChange() {
+          const label = labelInput.value.trim();
+          const stars = parseInt(starsInput.value, 10) || 1;
+          if (!label) {
+            labelInput.value = chore.label;
+            return;
+          }
+          chore.label = label;
+          chore.stars = stars;
+          saveData(data);
+          renderChildrenTable();
+          renderAdultsSections();
+          await postUpdateChoreDetails(chore.id, label, stars);
+        }
+
+        labelInput.addEventListener("change", submitDetailsChange);
+        starsInput.addEventListener("change", submitDetailsChange);
+
+        left.appendChild(labelInput);
+        left.appendChild(starsInput);
+        const starsSuffix = document.createElement("span");
+        starsSuffix.textContent = "⭐";
+        left.appendChild(starsSuffix);
 
         const right = document.createElement("div");
         right.style.display = "flex";
@@ -721,9 +763,51 @@
 
       activeRewards.forEach(reward => {
         const li = document.createElement("li");
+        li.style.flexWrap = "wrap";
 
-        const left = document.createElement("span");
-        left.textContent = `${reward.label} (${reward.cost}⭐)`;
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.alignItems = "center";
+        left.style.gap = "0.3rem";
+        left.style.flex = "2";
+        left.style.minWidth = "160px";
+
+        const labelInput = document.createElement("input");
+        labelInput.type = "text";
+        labelInput.value = reward.label;
+        labelInput.style.flex = "2";
+        labelInput.style.padding = "0.25rem";
+
+        const costInput = document.createElement("input");
+        costInput.type = "number";
+        costInput.min = "1";
+        costInput.max = "50";
+        costInput.value = reward.cost;
+        costInput.style.width = "55px";
+        costInput.style.padding = "0.25rem";
+
+        async function submitDetailsChange() {
+          const label = labelInput.value.trim();
+          const cost = parseInt(costInput.value, 10) || 1;
+          if (!label) {
+            labelInput.value = reward.label;
+            return;
+          }
+          reward.label = label;
+          reward.cost = cost;
+          saveData(data);
+          renderAdultsSections();
+          await postUpdateRewardDetails(reward.id, label, cost);
+        }
+
+        labelInput.addEventListener("change", submitDetailsChange);
+        costInput.addEventListener("change", submitDetailsChange);
+
+        left.appendChild(labelInput);
+        left.appendChild(costInput);
+        const costSuffix = document.createElement("span");
+        costSuffix.textContent = "⭐";
+        left.appendChild(costSuffix);
 
         const right = document.createElement("div");
         right.style.display = "flex";

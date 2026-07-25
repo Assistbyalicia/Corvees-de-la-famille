@@ -256,6 +256,44 @@ async function postUpdateChoreFrequency(choreId, frequency, weeklyDays) {
   }
 }
 
+// action: "update_chore_details" — change le nom et/ou la valeur en étoiles
+// d'une corvée existante.
+async function postUpdateChoreDetails(choreId, label, stars) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_chore_details",
+        choreId,
+        label,
+        stars
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour la corvée dans Notion :", e);
+  }
+}
+
+// action: "update_reward_details" — change le nom et/ou le coût d'une
+// récompense existante.
+async function postUpdateRewardDetails(rewardId, label, cost) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_reward_details",
+        rewardId,
+        label,
+        cost
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour la récompense dans Notion :", e);
+  }
+}
+
 // action: "add_reward" — crée la récompense dans Notion. personIds est un tableau.
 async function postAddReward(rewardId, label, cost, personIds) {
   try {
