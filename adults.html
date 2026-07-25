@@ -5,6 +5,9 @@
   <title>Carnet de quêtes – Vue adultes</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="shared.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6C5CE7" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <style>
     body {
       padding: 1rem;
@@ -88,6 +91,7 @@
               <th>Corvées totales</th>
               <th>Complétion</th>
               <th>Étoiles</th>
+              <th>Série</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -131,6 +135,20 @@
       <div class="section">
         <h2>Récompenses</h2>
         <ul class="list" id="rewards-list"></ul>
+      </div>
+
+      <div class="section">
+        <h3>Propositions en attente</h3>
+        <p class="small">
+          Récompenses proposées par les enfants : attribue un coût en étoiles pour les activer.
+        </p>
+        <ul class="list" id="proposed-rewards-list"></ul>
+      </div>
+
+      <div class="section">
+        <h3>Historique des achats</h3>
+        <p class="small">Les 30 derniers achats de récompenses, tous enfants confondus.</p>
+        <ul class="list" id="reward-history-list"></ul>
       </div>
 
       <div class="section">
@@ -243,11 +261,16 @@
         const tdStars = document.createElement("td");
         tdStars.textContent = `${state.stars}⭐`;
 
+        const streak = computeStreak((data.weeklyRecap && data.weeklyRecap.days) || [], child.id);
+        const tdStreak = document.createElement("td");
+        tdStreak.textContent = streak >= 2 ? `🔥 ${streak}` : "–";
+
         tr.appendChild(tdName);
         tr.appendChild(tdDone);
         tr.appendChild(tdTotal);
         tr.appendChild(tdRatio);
         tr.appendChild(tdStars);
+        tr.appendChild(tdStreak);
 
         tbody.appendChild(tr);
       });
@@ -255,7 +278,7 @@
       if (!data.children || data.children.length === 0) {
         const tr = document.createElement("tr");
         const td = document.createElement("td");
-        td.colSpan = 5;
+        td.colSpan = 6;
         td.textContent = "Aucun enfant configuré.";
         tr.appendChild(td);
         tbody.appendChild(tr);
@@ -323,11 +346,14 @@
       const completionRatio =
         totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
 
+      const streak = computeStreak((data.weeklyRecap && data.weeklyRecap.days) || [], person.id);
+
       const summary = document.createElement("p");
       summary.className = "small";
       summary.textContent =
         `${completedCount}/${totalChores} corvées faites ` +
-        `(${completionRatio}%), ${state.stars}⭐.`;
+        `(${completionRatio}%), ${state.stars}⭐.` +
+        (streak >= 2 ? ` 🔥 ${streak} jours d'affilée.` : "");
 
       const list = document.createElement("ul");
       list.className = "list";
@@ -392,6 +418,7 @@
       }
 
       const rewardsForPerson = (data.rewards || []).filter(reward => {
+        if (reward.pending) return false;
         if (!reward.assignedTo || reward.assignedTo.length === 0) return true;
         return reward.assignedTo.includes(person.id);
       });
@@ -602,8 +629,9 @@
       list.innerHTML = "";
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const activeRewards = (data.rewards || []).filter(reward => !reward.pending);
 
-      (data.rewards || []).forEach(reward => {
+      activeRewards.forEach(reward => {
         const li = document.createElement("li");
 
         const left = document.createElement("span");
@@ -654,9 +682,125 @@
         list.appendChild(li);
       });
 
-      if (!data.rewards || data.rewards.length === 0) {
+      if (activeRewards.length === 0) {
         const li = document.createElement("li");
         li.textContent = "Aucune récompense configurée.";
+        list.appendChild(li);
+      }
+    }
+
+    function renderProposedRewardsList() {
+      const list = document.getElementById("proposed-rewards-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const pending = (data.rewards || []).filter(reward => reward.pending);
+
+      pending.forEach(reward => {
+        const li = document.createElement("li");
+
+        const proposer = allPeople.find(p => p.id === reward.proposedBy);
+        const left = document.createElement("span");
+        left.textContent = `${reward.label}${proposer ? ` — proposée par ${proposer.name}` : ""}`;
+
+        const right = document.createElement("div");
+        right.style.display = "flex";
+        right.style.alignItems = "center";
+        right.style.gap = "0.5rem";
+
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "1";
+        input.max = "50";
+        input.placeholder = "Coût";
+        input.style.width = "70px";
+        input.style.padding = "0.25rem";
+
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "btn-primary";
+        approveBtn.textContent = "Valider";
+
+        approveBtn.addEventListener("click", async () => {
+          const cost = parseInt(input.value, 10);
+          if (!cost || cost < 1) {
+            alert("Merci de choisir un coût en étoiles.");
+            return;
+          }
+          reward.cost = cost;
+          reward.pending = false;
+          saveData(data);
+          renderRewardsList();
+          renderProposedRewardsList();
+          renderAdultsSections();
+          await postUpdateRewardCost(reward.id, cost);
+        });
+
+        const rejectBtn = document.createElement("button");
+        rejectBtn.className = "btn-danger";
+        rejectBtn.textContent = "Refuser";
+
+        rejectBtn.addEventListener("click", async () => {
+          const index = (data.rewards || []).indexOf(reward);
+          if (index !== -1) {
+            data.rewards.splice(index, 1);
+            saveData(data);
+            renderProposedRewardsList();
+            await postDeleteReward(reward.id);
+          }
+        });
+
+        right.appendChild(input);
+        right.appendChild(approveBtn);
+        right.appendChild(rejectBtn);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        list.appendChild(li);
+      });
+
+      if (pending.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune proposition en attente.";
+        list.appendChild(li);
+      }
+    }
+
+    function formatRewardHistoryDate(dateStr) {
+      const d = new Date(dateStr.length <= 10 ? `${dateStr}T00:00:00` : dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      return `${WEEKLY_RECAP_WEEKDAYS[d.getDay()]} ${dd}/${mm}`;
+    }
+
+    function renderRewardHistory() {
+      const list = document.getElementById("reward-history-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const history = data.rewardHistory || [];
+
+      history.forEach(entry => {
+        const li = document.createElement("li");
+
+        const person = allPeople.find(p => p.id === entry.personId);
+        const left = document.createElement("span");
+        left.textContent = `${formatRewardHistoryDate(entry.date)} — ${person ? person.name : entry.personId} a acheté « ${entry.rewardLabel} »`;
+
+        const cost = document.createElement("span");
+        cost.className = "badge";
+        cost.textContent = `${entry.cost}⭐`;
+
+        li.appendChild(left);
+        li.appendChild(cost);
+        list.appendChild(li);
+      });
+
+      if (history.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun achat pour le moment.";
         list.appendChild(li);
       }
     }
@@ -868,6 +1012,8 @@
         renderAdultsSections();
         renderChoresList();
         renderRewardsList();
+        renderProposedRewardsList();
+        renderRewardHistory();
         renderCodesList();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])]);
         setupAddChoreForm();

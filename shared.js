@@ -3,6 +3,14 @@ const STORAGE_KEY = "corvees-famille-v1";
 const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
 const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
 
+// Rend l'appli installable (icône sur l'écran d'accueil) et lui permet de
+// charger même sans réseau, voir sw.js.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(e => console.warn("Service worker non installé :", e));
+  });
+}
+
 // --- Authentification légère ---
 // Pas une vraie sécurité : ceci est un fichier statique sans serveur, donc ces
 // codes sont visibles en clair par quiconque ouvre ce fichier. Ça sert juste
@@ -70,6 +78,7 @@ const defaultData = {
   chores: [],
   rewards: [],
   weeklyRecap: { days: [] },
+  rewardHistory: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -151,6 +160,7 @@ async function loadAppData() {
       chores: mergeById(config.chores, local.chores),
       rewards: mergeById(config.rewards, local.rewards),
       weeklyRecap: config.weeklyRecap || { days: [] },
+      rewardHistory: config.rewardHistory || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -262,6 +272,44 @@ async function postAddReward(rewardId, label, cost, personIds) {
     });
   } catch (e) {
     console.warn("Impossible de créer la récompense dans Notion :", e);
+  }
+}
+
+// action: "propose_reward" — un enfant propose une récompense sans coût ; elle
+// reste "en attente" (reward.pending côté config) jusqu'à ce qu'un adulte lui
+// attribue un coût via postUpdateRewardCost.
+async function postProposeReward(rewardId, label, personId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "propose_reward",
+        rewardId,
+        label,
+        personId
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de proposer la récompense dans Notion :", e);
+  }
+}
+
+// action: "update_reward_cost" — un adulte attribue un coût à une récompense
+// proposée par un enfant, ce qui l'active (elle n'est plus "en attente").
+async function postUpdateRewardCost(rewardId, cost) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_reward_cost",
+        rewardId,
+        cost
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de valider le coût de la récompense dans Notion :", e);
   }
 }
 
@@ -404,6 +452,30 @@ function formatWeeklyRecapDay(dateStr) {
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${WEEKLY_RECAP_WEEKDAYS[d.getDay()]} ${dd}/${mm}`;
+}
+
+// Nombre de jours d'affilée (dans la fenêtre des 7 derniers jours fournie par
+// weeklyRecap) où personId a gagné au moins une étoile. Si le jour le plus
+// récent (aujourd'hui) est encore à 0, on part de la veille pour ne pas
+// casser la série avant même que la journée soit terminée.
+function computeStreak(days, personId) {
+  if (!days || days.length === 0) return 0;
+
+  let endIndex = days.length - 1;
+  if (!((days[endIndex].points && days[endIndex].points[personId]) > 0)) {
+    endIndex -= 1;
+  }
+
+  let streak = 0;
+  for (let i = endIndex; i >= 0; i--) {
+    const points = (days[i].points && days[i].points[personId]) || 0;
+    if (points > 0) {
+      streak += 1;
+    } else {
+      break;
+    }
+  }
+  return streak;
 }
 
 // Affiche un vrai tableau jour x personne pour les 7 derniers jours

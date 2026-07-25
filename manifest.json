@@ -1,0 +1,16 @@
+{
+  "name": "Carnet de quêtes",
+  "short_name": "Corvées",
+  "description": "Carnet de quêtes familial : corvées, étoiles et récompenses.",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#F6F4FC",
+  "theme_color": "#6C5CE7",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

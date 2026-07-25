@@ -5,6 +5,9 @@
   <title>Carnet de quêtes – Vue enfants</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="shared.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6C5CE7" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <style>
     body {
       padding: 1rem;
@@ -78,7 +81,10 @@
     <div class="section">
       <div class="header-row">
         <h1>⚔️ Carnet de quêtes – Enfants</h1>
-        <span id="total-stars" class="badge">⭐ 0 étoiles</span>
+        <div>
+          <span id="total-stars" class="badge">⭐ 0 étoiles</span>
+          <span id="streak-badge" class="badge" style="margin-left:0.4rem; display:none;"></span>
+        </div>
       </div>
       <p class="small">
         Choisis ton enfant, valide les corvées, débloque des récompenses.
@@ -105,6 +111,14 @@
     <div class="section">
       <h2>Boutique de récompenses</h2>
       <ul class="list" id="rewards-list"></ul>
+
+      <h3 style="margin-top:1rem;">Proposer une récompense</h3>
+      <p class="small">Le coût en étoiles sera choisi par un adulte.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <input id="propose-reward-label" type="text" placeholder="Nom de la récompense" style="flex:2; padding:0.25rem;" />
+        <button id="propose-reward-btn" class="btn-primary">Proposer</button>
+      </div>
+      <ul class="list" id="proposed-rewards-list" style="margin-top:0.5rem;"></ul>
     </div>
   </div>
 
@@ -219,6 +233,21 @@
       badge.textContent = `⭐ ${childState.stars} étoiles`;
     }
 
+    function renderStreak() {
+      const badge = document.getElementById("streak-badge");
+      if (!badge) return;
+
+      const days = (data.weeklyRecap && data.weeklyRecap.days) || [];
+      const streak = data.activeChildId ? computeStreak(days, data.activeChildId) : 0;
+
+      if (streak >= 2) {
+        badge.textContent = `🔥 ${streak} jours d'affilée`;
+        badge.style.display = "";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+
     function renderChores() {
       const list = document.getElementById("chores-list");
       list.innerHTML = "";
@@ -312,6 +341,7 @@
       const childState = getPersonDayState(data.activeChildId);
 
       const rewardsForChild = (data.rewards || []).filter(reward => {
+        if (reward.pending) return false;
         if (!reward.assignedTo || reward.assignedTo.length === 0) return true;
         return reward.assignedTo.includes(data.activeChildId);
       });
@@ -367,12 +397,70 @@
       return child ? child.name : "";
     }
 
+    function renderProposedRewards() {
+      const list = document.getElementById("proposed-rewards-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      if (!data.activeChildId) return;
+
+      const mine = (data.rewards || []).filter(
+        reward => reward.pending && reward.proposedBy === data.activeChildId
+      );
+
+      mine.forEach(reward => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = reward.label;
+
+        const status = document.createElement("span");
+        status.className = "badge";
+        status.textContent = "En attente";
+
+        li.appendChild(left);
+        li.appendChild(status);
+        list.appendChild(li);
+      });
+    }
+
+    function setupProposeRewardForm() {
+      const input = document.getElementById("propose-reward-label");
+      const btn = document.getElementById("propose-reward-btn");
+      if (!input || !btn) return;
+
+      btn.addEventListener("click", async () => {
+        const label = input.value.trim();
+        if (!label || !data.activeChildId) return;
+
+        const newId = `${label.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
+
+        (data.rewards || (data.rewards = [])).push({
+          id: newId,
+          label,
+          cost: 0,
+          assignedTo: [data.activeChildId],
+          pending: true,
+          proposedBy: data.activeChildId,
+          _source: "local"
+        });
+
+        saveData(data);
+        input.value = "";
+        renderAll();
+
+        await postProposeReward(newId, label, data.activeChildId);
+      });
+    }
+
     function renderAll() {
       renderChildren();
       renderProgress();
       renderTotalStars();
+      renderStreak();
       renderChores();
       renderRewards();
+      renderProposedRewards();
     }
 
     async function initApp() {
@@ -404,6 +492,7 @@
       setupTabs("quetes");
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
+      setupProposeRewardForm();
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();
