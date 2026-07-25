@@ -195,7 +195,7 @@
       allPeople.forEach(person => {
         const btn = document.createElement("button");
         btn.className = "person-btn";
-        btn.textContent = person.name;
+        btn.textContent = `${getPersonAvatar(person)} ${person.name}`;
         btn.addEventListener("click", () => {
           selectedPersonId = person.id;
           document.getElementById("pin-label").textContent = `Code de ${person.name} :`;
@@ -256,7 +256,7 @@
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
       const person = allPeople.find(p => p.id === session.personId);
-      const name = person ? person.name : session.personId;
+      const name = person ? `${getPersonAvatar(person)} ${person.name}` : session.personId;
 
       document.getElementById("session-text").textContent =
         `Tu es déjà connecté(e) en tant que ${name}${session.isAdmin ? " (admin)" : ""}.`;

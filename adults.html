@@ -202,6 +202,16 @@
 
     <div class="tab-panel" id="tab-compte">
       <div class="section">
+        <h3>Mon avatar</h3>
+        <p class="small">Choisis l'emoji qui te représente, il s'affichera partout dans l'appli.</p>
+        <p id="avatar-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+          <input id="avatar-input" type="text" maxlength="8" placeholder="🦫" style="width:70px; font-size:1.5rem; text-align:center; padding:0.25rem;" />
+          <button id="avatar-btn" class="btn-primary">Enregistrer</button>
+        </div>
+      </div>
+
+      <div class="section">
         <h3>Changer mon code</h3>
         <p id="change-pin-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
@@ -263,7 +273,7 @@
         const tr = document.createElement("tr");
 
         const tdName = document.createElement("td");
-        tdName.textContent = child.name;
+        tdName.textContent = `${getPersonAvatar(child)} ${child.name}`;
 
         const tdDone = document.createElement("td");
         tdDone.textContent = completed;
@@ -319,7 +329,7 @@
       children.forEach(child => {
         const btn = document.createElement("button");
         btn.className = "person-chip" + (child.id === activeChildDetailId ? " active" : "");
-        btn.textContent = child.name;
+        btn.textContent = `${getPersonAvatar(child)} ${child.name}`;
         btn.addEventListener("click", () => {
           activeChildDetailId = child.id;
           renderChildrenDetailPicker();
@@ -347,6 +357,31 @@
       activeChildDetailId = child.id;
 
       const state = getPersonDayState(child.id);
+
+      const levelSummary = document.createElement("p");
+      levelSummary.className = "small";
+      levelSummary.textContent = `🏅 ${child.level || "Apprenti(e)"} — ${child.lifetimeStars || 0}⭐ cumulées à vie.`;
+      container.appendChild(levelSummary);
+
+      const badgesRow = document.createElement("div");
+      badgesRow.style.display = "flex";
+      badgesRow.style.flexWrap = "wrap";
+      badgesRow.style.gap = "0.4rem";
+      badgesRow.style.marginBottom = "0.75rem";
+      const badges = child.badges || [];
+      badges.forEach(label => {
+        const span = document.createElement("span");
+        span.className = "badge";
+        span.textContent = label;
+        badgesRow.appendChild(span);
+      });
+      if (badges.length === 0) {
+        const span = document.createElement("span");
+        span.className = "small";
+        span.textContent = "Pas encore de badge débloqué.";
+        badgesRow.appendChild(span);
+      }
+      container.appendChild(badgesRow);
 
       const choresForChild = (data.chores || []).filter(chore => {
         if (!isChoreVisibleToday(chore)) return false;
@@ -392,7 +427,7 @@
       adults.forEach(person => {
         const btn = document.createElement("button");
         btn.className = "person-chip" + (person.id === data.activeAdultId ? " active" : "");
-        btn.textContent = person.name;
+        btn.textContent = `${getPersonAvatar(person)} ${person.name}`;
         btn.addEventListener("click", () => {
           data.activeAdultId = person.id;
           saveData(data);
@@ -1260,6 +1295,7 @@
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
+      setupAvatarForm(session, [...(data.children || []), ...(data.adults || [])]);
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();

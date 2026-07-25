@@ -99,6 +99,17 @@
     </div>
 
     <div class="section">
+      <div class="header-row">
+        <h2 id="level-name">🏅 Apprenti(e)</h2>
+        <span class="small" id="level-progress-text"></span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="level-progress-fill"></div>
+      </div>
+      <div id="badges-list" style="margin-top:0.6rem; display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
+    </div>
+
+    <div class="section">
       <h2>Progression du jour</h2>
       <p id="progress-text">0 / 0 corvées complétées</p>
       <div class="progress-bar">
@@ -134,6 +145,16 @@
   </div>
 
   <div class="tab-panel" id="tab-compte">
+    <div class="section">
+      <h3>Mon avatar</h3>
+      <p class="small">Choisis l'emoji qui te représente, il s'affichera partout dans l'appli.</p>
+      <p id="avatar-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+        <input id="avatar-input" type="text" maxlength="8" placeholder="🦫" style="width:70px; font-size:1.5rem; text-align:center; padding:0.25rem;" />
+        <button id="avatar-btn" class="btn-primary">Enregistrer</button>
+      </div>
+    </div>
+
     <div class="section">
       <h3>Changer mon code</h3>
       <p id="change-pin-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
@@ -175,7 +196,7 @@
         const activeChild = childrenOnly.find(c => c.id === data.activeChildId);
         const span = document.createElement("span");
         span.className = "child active";
-        span.textContent = activeChild ? activeChild.name : session.personId;
+        span.textContent = activeChild ? `${getPersonAvatar(activeChild)} ${activeChild.name}` : session.personId;
         container.appendChild(span);
         return;
       }
@@ -183,7 +204,7 @@
       childrenOnly.forEach(child => {
         const btn = document.createElement("button");
         btn.className = "child" + (child.id === data.activeChildId ? " active" : "");
-        btn.textContent = child.name;
+        btn.textContent = `${getPersonAvatar(child)} ${child.name}`;
         btn.addEventListener("click", () => {
           data.activeChildId = child.id;
           saveData(data);
@@ -276,6 +297,56 @@
         badge.style.display = "";
       } else {
         badge.style.display = "none";
+      }
+    }
+
+    function renderLevel() {
+      const nameEl = document.getElementById("level-name");
+      const progressText = document.getElementById("level-progress-text");
+      const progressFill = document.getElementById("level-progress-fill");
+      const badgesList = document.getElementById("badges-list");
+      if (!nameEl || !progressText || !progressFill || !badgesList) return;
+
+      const child = (data.children || []).find(c => c.id === data.activeChildId);
+      if (!child) {
+        nameEl.textContent = "🏅 Apprenti(e)";
+        progressText.textContent = "";
+        progressFill.style.width = "0%";
+        badgesList.innerHTML = "";
+        return;
+      }
+
+      const lifetimeStars = child.lifetimeStars || 0;
+      const levelMin = child.levelMin || 0;
+      const levelMax = child.levelMax === undefined ? null : child.levelMax;
+
+      nameEl.textContent = `🏅 ${child.level || "Apprenti(e)"}`;
+
+      if (levelMax === null) {
+        progressText.textContent = `${lifetimeStars}⭐ — niveau maximum atteint !`;
+        progressFill.style.width = "100%";
+      } else {
+        const ratio = Math.max(
+          0,
+          Math.min(100, Math.round(((lifetimeStars - levelMin) / (levelMax - levelMin)) * 100))
+        );
+        progressText.textContent = `${lifetimeStars} / ${levelMax}⭐ jusqu'au niveau suivant`;
+        progressFill.style.width = `${ratio}%`;
+      }
+
+      badgesList.innerHTML = "";
+      const badges = child.badges || [];
+      badges.forEach(label => {
+        const span = document.createElement("span");
+        span.className = "badge";
+        span.textContent = label;
+        badgesList.appendChild(span);
+      });
+      if (badges.length === 0) {
+        const span = document.createElement("span");
+        span.className = "small";
+        span.textContent = "Pas encore de badge débloqué.";
+        badgesList.appendChild(span);
       }
     }
 
@@ -490,6 +561,7 @@
       renderQuetesBadge();
       renderTotalStars();
       renderStreak();
+      renderLevel();
       renderChores();
       renderRewards();
       renderProposedRewards();
@@ -524,6 +596,7 @@
       setupTabs("quetes");
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
+      setupAvatarForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupProposeRewardForm();
 
       document.getElementById("logout-btn").addEventListener("click", () => {

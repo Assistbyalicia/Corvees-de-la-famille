@@ -456,6 +456,29 @@ async function postUpdateSecurityQuestion(personId, question, answer) {
   }
 }
 
+// action: "update_avatar" — enregistre l'emoji choisi par la personne dans
+// Notion, pour le retrouver sur tous les appareils.
+async function postUpdateAvatar(personId, avatar) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_avatar",
+        personId,
+        avatar
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour l'avatar dans Notion :", e);
+  }
+}
+
+// Emoji d'une personne, avec un repli neutre si elle n'en a pas encore choisi.
+function getPersonAvatar(person) {
+  return (person && person.avatar) || "🙂";
+}
+
 const CHORE_FREQUENCIES = [
   { value: "quotidien", label: "Quotidien" },
   { value: "hebdomadaire", label: "Hebdomadaire" },
@@ -731,5 +754,36 @@ function setupSecurityQuestionForm(session, allPeople) {
     message.textContent = "Question secrète enregistrée !";
     message.style.display = "block";
     answerInput.value = "";
+  });
+}
+
+// Formulaire partagé "Mon avatar" : attend les éléments d'id avatar-input /
+// avatar-btn / avatar-message sur la page. Un simple champ texte (pas de
+// liste imposée) pour que chacun choisisse l'emoji qui lui plaît vraiment.
+function setupAvatarForm(session, allPeople) {
+  const btn = document.getElementById("avatar-btn");
+  const input = document.getElementById("avatar-input");
+  const message = document.getElementById("avatar-message");
+
+  if (!btn || !input || !message) return;
+
+  const person = (allPeople || []).find(p => p.id === session.personId);
+  input.value = getPersonAvatar(person);
+
+  btn.addEventListener("click", async () => {
+    message.style.display = "none";
+
+    const avatar = input.value.trim();
+    if (!avatar) {
+      message.textContent = "Choisis un emoji.";
+      message.style.display = "block";
+      return;
+    }
+
+    await postUpdateAvatar(session.personId, avatar);
+
+    message.style.color = "#28a745";
+    message.textContent = "Avatar enregistré !";
+    message.style.display = "block";
   });
 }
