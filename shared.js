@@ -205,7 +205,9 @@ async function postRewardAction(personId, rewardId, action) {
 // action: "add_chore" — crée la corvée dans Notion pour qu'elle soit reconnue
 // par l'automatisation (et visible depuis les autres appareils). personIds
 // est un tableau (une corvée peut être assignée à plusieurs personnes).
-async function postAddChore(choreId, label, stars, personIds) {
+// frequency: "quotidien" (défaut) | "hebdomadaire" | "ponctuel" ; weeklyDays
+// (tableau de jours, 0=dimanche...6=samedi) n'est utile que pour "hebdomadaire".
+async function postAddChore(choreId, label, stars, personIds, frequency, weeklyDays) {
   try {
     await fetch(API_COMPLETE_URL, {
       method: "POST",
@@ -215,11 +217,32 @@ async function postAddChore(choreId, label, stars, personIds) {
         choreId,
         label,
         stars,
-        personIds
+        personIds,
+        frequency,
+        weeklyDays
       })
     });
   } catch (e) {
     console.warn("Impossible de créer la corvée dans Notion :", e);
+  }
+}
+
+// action: "update_chore_frequency" — change la fréquence (et les jours, si
+// hebdomadaire) d'une corvée existante.
+async function postUpdateChoreFrequency(choreId, frequency, weeklyDays) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_chore_frequency",
+        choreId,
+        frequency,
+        weeklyDays
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible de mettre à jour la fréquence de la corvée dans Notion :", e);
   }
 }
 
@@ -343,6 +366,35 @@ async function postUpdateSecurityQuestion(personId, question, answer) {
   } catch (e) {
     console.warn("Impossible de mettre à jour la question secrète dans Notion :", e);
   }
+}
+
+const CHORE_FREQUENCIES = [
+  { value: "quotidien", label: "Quotidien" },
+  { value: "hebdomadaire", label: "Hebdomadaire" },
+  { value: "ponctuel", label: "Ponctuel" }
+];
+
+const CHORE_WEEKDAYS = [
+  { value: 0, label: "Dimanche" },
+  { value: 1, label: "Lundi" },
+  { value: 2, label: "Mardi" },
+  { value: 3, label: "Mercredi" },
+  { value: 4, label: "Jeudi" },
+  { value: 5, label: "Vendredi" },
+  { value: 6, label: "Samedi" }
+];
+
+// Une corvée "quotidien" (ou sans fréquence définie, pour compat avec les
+// corvées créées avant cette fonctionnalité) est toujours visible : le
+// state étant remis à zéro chaque jour, elle "recommence" naturellement.
+// Une corvée "hebdomadaire" n'est visible que les jours choisis (weeklyDays,
+// un ou plusieurs jours). Une corvée "ponctuelle" reste visible jusqu'à ce
+// qu'elle soit faite, puis elle est supprimée (voir kids.html/adults.html).
+function isChoreVisibleToday(chore) {
+  const frequency = chore.frequency || "quotidien";
+  if (frequency !== "hebdomadaire") return true;
+  if (!chore.weeklyDays || chore.weeklyDays.length === 0) return true;
+  return chore.weeklyDays.includes(new Date().getDay());
 }
 
 const WEEKLY_RECAP_WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];

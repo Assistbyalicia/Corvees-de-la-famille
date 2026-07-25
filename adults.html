@@ -119,7 +119,9 @@
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; align-items:center;">
           <input id="new-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
           <input id="new-chore-stars" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+          <select id="new-chore-frequency" style="padding:0.25rem;"></select>
         </div>
+        <div class="assign-checkboxes" id="new-chore-weekdays" style="margin-top:0.5rem; display:none;"></div>
         <div class="assign-checkboxes" id="new-chore-people" style="margin-top:0.5rem;"></div>
         <button id="add-chore-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </div>
@@ -213,6 +215,7 @@
         const state = getPersonDayState(child.id);
 
         const choresForChild = (data.chores || []).filter(chore => {
+          if (!isChoreVisibleToday(chore)) return false;
           if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
           return chore.assignedTo.includes(child.id);
         });
@@ -304,6 +307,7 @@
       const state = getPersonDayState(person.id);
 
       const choresForPerson = (data.chores || []).filter(chore => {
+        if (!isChoreVisibleToday(chore)) return false;
         if (chore.assignedTo && chore.assignedTo.length > 0) {
           return chore.assignedTo.includes(person.id);
         }
@@ -355,6 +359,13 @@
             personState.completedChores.push(chore.id);
             personState.stars += chore.stars;
             await postChoreAction(person.id, chore.id, "complete");
+
+            if ((chore.frequency || "quotidien") === "ponctuel") {
+              // Une corvée ponctuelle disparaît définitivement une fois faite.
+              const choreIndex = (data.chores || []).indexOf(chore);
+              if (choreIndex !== -1) data.chores.splice(choreIndex, 1);
+              await postDeleteChore(chore.id);
+            }
           } else {
             personState.completedChores.splice(index, 1);
             personState.stars -= chore.stars;
@@ -466,6 +477,31 @@
       );
     }
 
+    // Construit un groupe de cases à cocher (une par jour de la semaine)
+    // reflétant selectedDays (tableau d'index 0=dimanche...6=samedi).
+    function buildDayCheckboxes(container, selectedDays, onToggle) {
+      container.innerHTML = "";
+      CHORE_WEEKDAYS.forEach(day => {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = day.value;
+        input.checked = (selectedDays || []).includes(day.value);
+        if (onToggle) {
+          input.addEventListener("change", () => onToggle(day.value, input.checked));
+        }
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(day.label));
+        container.appendChild(label);
+      });
+    }
+
+    function getCheckedDays(container) {
+      return Array.from(container.querySelectorAll("input[type=checkbox]:checked")).map(
+        cb => parseInt(cb.value, 10)
+      );
+    }
+
     function renderChoresList() {
       const list = document.getElementById("chores-list");
       if (!list) return;
@@ -475,6 +511,7 @@
 
       (data.chores || []).forEach(chore => {
         const li = document.createElement("li");
+        li.style.flexWrap = "wrap";
 
         const left = document.createElement("span");
         left.textContent = `${chore.label} (${chore.stars}⭐)`;
@@ -502,6 +539,30 @@
           await postUpdateChoreAssignment(chore.id, chore.assignedTo);
         });
 
+        const selectFrequency = document.createElement("select");
+        selectFrequency.style.padding = "0.2rem";
+        const weekdaysContainer = document.createElement("div");
+        weekdaysContainer.className = "assign-checkboxes";
+
+        async function submitFrequencyChange() {
+          const frequency = selectFrequency.value;
+          const weeklyDays = frequency === "hebdomadaire" ? getCheckedDays(weekdaysContainer) : undefined;
+          chore.frequency = frequency;
+          if (weeklyDays !== undefined) {
+            chore.weeklyDays = weeklyDays;
+          } else {
+            delete chore.weeklyDays;
+          }
+          saveData(data);
+          renderChildrenTable();
+          renderAdultsSections();
+          await postUpdateChoreFrequency(chore.id, frequency, weeklyDays);
+        }
+
+        setupFrequencyControls(selectFrequency, weekdaysContainer, chore.weeklyDays || [], submitFrequencyChange);
+        selectFrequency.value = chore.frequency || "quotidien";
+        weekdaysContainer.style.display = selectFrequency.value === "hebdomadaire" ? "" : "none";
+
         const btn = document.createElement("button");
         btn.className = "btn-danger";
         btn.textContent = "Supprimer";
@@ -519,6 +580,8 @@
         });
 
         right.appendChild(checkboxes);
+        right.appendChild(selectFrequency);
+        right.appendChild(weekdaysContainer);
         right.appendChild(btn);
 
         li.appendChild(left);
@@ -652,21 +715,51 @@
       }
     }
 
+    // Construit un <select> de fréquence (Quotidien/Hebdomadaire/Ponctuel) et,
+    // si présent, le groupe de cases à cocher des jours associé (affiché
+    // seulement quand la fréquence choisie est "hebdomadaire"). onChange
+    // (optionnel) est appelé à chaque changement de fréquence ou de jour.
+    function setupFrequencyControls(freqSelect, weekdaysContainer, selectedDays, onChange) {
+      freqSelect.innerHTML = "";
+      CHORE_FREQUENCIES.forEach(f => {
+        const option = document.createElement("option");
+        option.value = f.value;
+        option.textContent = f.label;
+        freqSelect.appendChild(option);
+      });
+
+      buildDayCheckboxes(weekdaysContainer, selectedDays, onChange ? () => onChange() : null);
+
+      function toggleWeekdays() {
+        weekdaysContainer.style.display = freqSelect.value === "hebdomadaire" ? "" : "none";
+      }
+      freqSelect.addEventListener("change", () => {
+        toggleWeekdays();
+        if (onChange) onChange();
+      });
+      toggleWeekdays();
+    }
+
     function setupAddChoreForm() {
       const peopleContainer = document.getElementById("new-chore-people");
       const btnAdd = document.getElementById("add-chore-btn");
       const inputLabel = document.getElementById("new-chore-label");
       const inputStars = document.getElementById("new-chore-stars");
+      const selectFrequency = document.getElementById("new-chore-frequency");
+      const weekdaysContainer = document.getElementById("new-chore-weekdays");
 
-      if (!peopleContainer || !btnAdd || !inputLabel || !inputStars) return;
+      if (!peopleContainer || !btnAdd || !inputLabel || !inputStars || !selectFrequency || !weekdaysContainer) return;
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
       buildPersonCheckboxes(peopleContainer, allPeople, []);
+      setupFrequencyControls(selectFrequency, weekdaysContainer, []);
 
       btnAdd.addEventListener("click", async () => {
         const label = inputLabel.value.trim();
         const stars = parseInt(inputStars.value, 10) || 1;
         const personIds = getCheckedPersonIds(peopleContainer);
+        const frequency = selectFrequency.value;
+        const weeklyDays = frequency === "hebdomadaire" ? getCheckedDays(weekdaysContainer) : undefined;
 
         if (!label) {
           alert("Merci de saisir un nom de corvée.");
@@ -675,13 +768,17 @@
 
         const newId = `${label.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
 
-        (data.chores || (data.chores = [])).push({
+        const newChore = {
           id: newId,
           label,
           stars,
           assignedTo: personIds,
+          frequency,
           _source: "local"
-        });
+        };
+        if (weeklyDays !== undefined) newChore.weeklyDays = weeklyDays;
+
+        (data.chores || (data.chores = [])).push(newChore);
 
         saveData(data);
         renderChildrenTable();
@@ -691,8 +788,11 @@
         inputLabel.value = "";
         inputStars.value = "1";
         buildPersonCheckboxes(peopleContainer, allPeople, []);
+        selectFrequency.value = "quotidien";
+        buildDayCheckboxes(weekdaysContainer, []);
+        weekdaysContainer.style.display = "none";
 
-        await postAddChore(newId, label, stars, personIds);
+        await postAddChore(newId, label, stars, personIds, frequency, weeklyDays);
       });
     }
 

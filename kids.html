@@ -194,6 +194,7 @@
 
       const childState = getPersonDayState(data.activeChildId);
       const choresForChild = (data.chores || []).filter(chore => {
+        if (!isChoreVisibleToday(chore)) return false;
         if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
         return chore.assignedTo.includes(data.activeChildId);
       });
@@ -232,6 +233,7 @@
       const childState = getPersonDayState(data.activeChildId);
 
       const choresForChild = (data.chores || []).filter(chore => {
+        if (!isChoreVisibleToday(chore)) return false;
         if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
         return chore.assignedTo.includes(data.activeChildId);
       });
@@ -263,6 +265,13 @@
             state.completedChores.push(chore.id);
             state.stars += chore.stars;
             await postChoreAction(data.activeChildId, chore.id, "complete");
+
+            if ((chore.frequency || "quotidien") === "ponctuel") {
+              // Une corvée ponctuelle disparaît définitivement une fois faite.
+              const choreIndex = (data.chores || []).indexOf(chore);
+              if (choreIndex !== -1) data.chores.splice(choreIndex, 1);
+              await postDeleteChore(chore.id);
+            }
           } else {
             state.completedChores.splice(index, 1);
             state.stars -= chore.stars;
