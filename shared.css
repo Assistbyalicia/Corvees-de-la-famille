@@ -221,6 +221,7 @@ tfoot td {
   border: 1px solid var(--color-border);
 }
 .tab-btn {
+  position: relative;
   padding: 0.5rem 1rem;
   border-radius: var(--radius-pill);
   border: none;
@@ -229,6 +230,21 @@ tfoot td {
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 600;
+}
+.tab-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: #E11D48;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 .tab-btn:hover {
   transform: none;

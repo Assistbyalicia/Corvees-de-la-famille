@@ -74,7 +74,10 @@
       <button class="tab-btn" data-tab="enfants">Enfants</button>
       <button class="tab-btn" data-tab="adultes">Adultes</button>
       <button class="tab-btn" data-tab="corvees">Corvées</button>
-      <button class="tab-btn" data-tab="recompenses">Récompenses</button>
+      <button class="tab-btn" data-tab="recompenses">
+        Récompenses
+        <span id="recompenses-tab-badge" class="tab-badge" style="display:none;"></span>
+      </button>
       <button class="tab-btn" data-tab="codes">Codes</button>
       <button class="tab-btn" data-tab="recap">Récap</button>
       <button class="tab-btn" data-tab="compte">Mon compte</button>
@@ -861,10 +864,25 @@
       }
     }
 
+    function renderPendingRewardsBadge() {
+      const badge = document.getElementById("recompenses-tab-badge");
+      if (!badge) return;
+
+      const count = (data.rewards || []).filter(reward => reward.pending).length;
+      if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = "block";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+
     function renderProposedRewardsList() {
       const list = document.getElementById("proposed-rewards-list");
       if (!list) return;
       list.innerHTML = "";
+
+      renderPendingRewardsBadge();
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
       const pending = (data.rewards || []).filter(reward => reward.pending);
