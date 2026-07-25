@@ -109,6 +109,10 @@
       <div id="badges-list" style="margin-top:0.6rem; display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
     </div>
 
+    <div class="section" id="garde-today-section" style="display:none;">
+      <p class="small" style="margin:0;">🏠 <span id="garde-today-text"></span></p>
+    </div>
+
     <div class="section">
       <h2>Progression du jour</h2>
       <p id="progress-text">0 / 0 corvées complétées</p>
@@ -350,6 +354,26 @@
       }
     }
 
+    function renderGardeToday() {
+      const section = document.getElementById("garde-today-section");
+      const text = document.getElementById("garde-today-text");
+      if (!section || !text) return;
+
+      const child = (data.children || []).find(c => c.id === data.activeChildId);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const loc = child ? getChildGardeLocation(child.name, today, data.gardeOverrides || {}) : null;
+
+      if (!loc || !loc.parent) {
+        section.style.display = "none";
+        return;
+      }
+
+      const display = GARDE_PARENT_DISPLAY[loc.parent];
+      text.textContent = `Aujourd'hui : ${display.emoji} ${display.text}${loc.overridden ? " (exception)" : ""}`;
+      section.style.display = "block";
+    }
+
     function renderChores() {
       const list = document.getElementById("chores-list");
       list.innerHTML = "";
@@ -562,6 +586,7 @@
       renderTotalStars();
       renderStreak();
       renderLevel();
+      renderGardeToday();
       renderChores();
       renderRewards();
       renderProposedRewards();

@@ -224,7 +224,7 @@
         if (!selectedPersonId) return;
         const allPeople = [...(data.children || []), ...(data.adults || [])];
         if (checkPin(selectedPersonId, input.value.trim(), allPeople)) {
-          const session = setSession(selectedPersonId);
+          const session = setSession(selectedPersonId, allPeople);
           goToPersonPage(selectedPersonId, session);
         } else {
           errorText.style.display = "block";

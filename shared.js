@@ -16,7 +16,6 @@ if ("serviceWorker" in navigator) {
 // codes sont visibles en clair par quiconque ouvre ce fichier. Ça sert juste
 // à éviter qu'un enfant clique par erreur sur l'espace admin ou sur celui
 // d'un autre. Change les codes ci-dessous, et ajoute une ligne par personne.
-const AUTH_ADMINS = ["maman"];
 const AUTH_PINS = {
   maman: "1234",
   Roxanne: "1111",
@@ -44,8 +43,12 @@ function getSession() {
   }
 }
 
-function setSession(personId) {
-  const session = { personId, isAdmin: AUTH_ADMINS.includes(personId) };
+// isAdmin vient de la propriété "Admin" (checkbox) de la personne dans
+// Notion, pas d'une liste codée en dur : coche cette case sur n'importe
+// quel adulte pour lui donner l'accès complet à la vue adultes.
+function setSession(personId, allPeople) {
+  const person = (allPeople || []).find(p => p.id === personId);
+  const session = { personId, isAdmin: !!(person && person.isAdmin) };
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
@@ -80,6 +83,7 @@ const defaultData = {
   weeklyRecap: { days: [] },
   rewardHistory: [],
   choreHistory: [],
+  gardeOverrides: {},
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -163,6 +167,7 @@ async function loadAppData() {
       weeklyRecap: config.weeklyRecap || { days: [] },
       rewardHistory: config.rewardHistory || [],
       choreHistory: config.choreHistory || [],
+      gardeOverrides: config.gardeOverrides || {},
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -477,6 +482,180 @@ async function postUpdateAvatar(personId, avatar) {
 // Emoji d'une personne, avec un repli neutre si elle n'en a pas encore choisi.
 function getPersonAvatar(person) {
   return (person && person.avatar) || "🙂";
+}
+
+/* ============================================================
+   PLANNING DE GARDE — config à mettre à jour chaque année (dates
+   des petites vacances zone B, point de départ des blocs d'été).
+   Le calcul se fait ici côté client ; seules les exceptions posées
+   à la main par l'admin (gardeOverrides) viennent de Notion.
+   ============================================================ */
+
+// Alternance des week-ends "normaux" (hors vacances). Repère : le vendredi
+// de cette date-là, le week-end est chez ce parent. Ça alterne ensuite
+// chaque semaine.
+const GARDE_WEEKEND_ANCHOR = { friday: "2026-06-26", parent: "papa" };
+
+// Petites vacances (Toussaint, Noël, Hiver, Printemps) — dates ZONE B.
+// start = premier jour de vacances (le samedi), end = jour de la reprise
+// (le lundi). firstHalfParent = qui a les filles la 1ère moitié (la
+// bascule se fait un dimanche soir, au milieu).
+const GARDE_PETITES_VACANCES = [
+  { name: "Vacances de la Toussaint", start: "2026-10-17", end: "2026-11-02", firstHalfParent: "papa" },
+  { name: "Vacances de Noël",         start: "2026-12-19", end: "2027-01-04", firstHalfParent: "papa" },
+  { name: "Vacances d'Hiver",         start: "2027-02-20", end: "2027-03-08", firstHalfParent: "maman" },
+  { name: "Vacances de Printemps",    start: "2027-04-17", end: "2027-05-03", firstHalfParent: "maman" }
+];
+
+// Grandes vacances d'été : blocs d'environ 15 jours, bascule le dimanche soir.
+const GARDE_GRANDES_VACANCES = {
+  vacancesStart: "2026-07-03",
+  blockAnchorStart: "2026-07-06",
+  firstBlockParent: "papa",
+  blockLengthDays: 14,
+  rentree: "2026-09-01"
+};
+
+// Domicile habituel de chaque enfant en semaine (hors week-end/vacances).
+const GARDE_CHILD_HOME_PARENT = { Roxanne: "maman", Elena: "papa" };
+
+const GARDE_PARENT_DISPLAY = {
+  maman: { text: "Chez Maman", emoji: "👩" },
+  papa: { text: "Chez Papa", emoji: "👨" }
+};
+
+function gardeParseDate(s) {
+  const [y, m, day] = s.split("-").map(Number);
+  return new Date(y, m - 1, day);
+}
+function gardeAddDays(date, n) {
+  const r = new Date(date);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+function gardeDaysBetween(a, b) {
+  return Math.round((b - a) / 86400000);
+}
+function gardeDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function gardeSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function gardeOpposite(p) {
+  return p === "papa" ? "maman" : "papa";
+}
+
+// Pour une vacance donnée, calcule la date de bascule (dimanche le plus
+// proche du milieu).
+function gardeMidpointSunday(start, end) {
+  const total = gardeDaysBetween(start, end);
+  const roughMid = gardeAddDays(start, Math.round(total / 2));
+  const dow = roughMid.getDay();
+  const offsetToSunday = dow === 0 ? 0 : (dow <= 3 ? -dow : 7 - dow);
+  return gardeAddDays(roughMid, offsetToSunday);
+}
+
+function gardeFridayOfWeek(date) {
+  const r = new Date(date);
+  const dow = r.getDay();
+  if (dow === 5) return r;
+  if (dow === 6) return gardeAddDays(r, -1);
+  if (dow === 0) return gardeAddDays(r, -2);
+  return null;
+}
+
+function gardeNormalWeekendParent(date) {
+  const fri = gardeFridayOfWeek(date);
+  const anchorFri = gardeParseDate(GARDE_WEEKEND_ANCHOR.friday);
+  const weeksDiff = Math.round(gardeDaysBetween(anchorFri, fri) / 7);
+  const isAnchorParity = (weeksDiff % 2 + 2) % 2 === 0;
+  return isAnchorParity ? GARDE_WEEKEND_ANCHOR.parent : gardeOpposite(GARDE_WEEKEND_ANCHOR.parent);
+}
+
+// Renvoie { parent: "maman"|"papa"|null, period, label } pour une date
+// donnée. parent = null hors week-end/vacances (jour d'école normal,
+// dépend du domicile habituel de l'enfant). overrides est la map
+// gardeOverrides ({ "AAAA-MM-JJ": "maman"|"papa" }) posée à la main par
+// l'admin, qui prend toujours le dessus sur le calcul automatique.
+function getSharedGardeLocation(date, overrides) {
+  const key = gardeDateKey(date);
+  if (overrides && overrides[key]) {
+    return { parent: overrides[key], period: "Modifié", label: "Modifié manuellement", overridden: true };
+  }
+
+  const gvStart = gardeParseDate(GARDE_GRANDES_VACANCES.vacancesStart);
+  const gvRentree = gardeParseDate(GARDE_GRANDES_VACANCES.rentree);
+  const gvAnchorStart = gardeParseDate(GARDE_GRANDES_VACANCES.blockAnchorStart);
+
+  if (date >= gvStart && date < gvRentree) {
+    const dow = date.getDay();
+    if (dow === 5 || dow === 6 || dow === 0) {
+      return { parent: gardeNormalWeekendParent(date), period: "Grandes vacances", label: "Grandes vacances (week-end)" };
+    }
+    if (date < gvAnchorStart) {
+      return { parent: null, period: "Grandes vacances", label: "Grandes vacances" };
+    }
+    const blockIndex = Math.floor(gardeDaysBetween(gvAnchorStart, date) / GARDE_GRANDES_VACANCES.blockLengthDays);
+    const parent = (blockIndex % 2 === 0) ? GARDE_GRANDES_VACANCES.firstBlockParent : gardeOpposite(GARDE_GRANDES_VACANCES.firstBlockParent);
+    return { parent, period: "Grandes vacances", label: `Grandes vacances — semaine ${blockIndex + 1}` };
+  }
+
+  for (const v of GARDE_PETITES_VACANCES) {
+    const start = gardeParseDate(v.start), end = gardeParseDate(v.end);
+    if (date >= start && date < end) {
+      const mid = gardeMidpointSunday(start, end);
+      const parent = date < mid ? v.firstHalfParent : gardeOpposite(v.firstHalfParent);
+      return { parent, period: v.name, label: `${v.name} (${date < mid ? "1ère" : "2ème"} moitié)` };
+    }
+  }
+
+  const dow = date.getDay();
+  if (dow === 5 || dow === 6 || dow === 0) {
+    return { parent: gardeNormalWeekendParent(date), period: "Week-end", label: "Week-end" };
+  }
+  return { parent: null, period: "Semaine", label: "Semaine (chacune chez son domicile habituel)" };
+}
+
+// Position spécifique d'un enfant, qui tient compte de son domicile par
+// défaut en semaine (childName = person.name, ex. "Roxanne").
+function getChildGardeLocation(childName, date, overrides) {
+  const shared = getSharedGardeLocation(date, overrides);
+  if (shared.parent) return shared;
+  const homeParent = GARDE_CHILD_HOME_PARENT[childName];
+  if (!homeParent) return { parent: null, period: shared.period, label: shared.label };
+  return { parent: homeParent, period: shared.period, label: "Domicile habituel" };
+}
+
+// action: "set_garde_override" — force manuellement un jour chez un parent
+// (exception au calcul automatique), ex. échange de week-end.
+async function postSetGardeOverride(dateKey, parent) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_garde_override", date: dateKey, parent })
+    });
+  } catch (e) {
+    console.warn("Impossible d'enregistrer l'exception de garde dans Notion :", e);
+  }
+}
+
+// action: "clear_garde_override" — retire une exception posée à la main,
+// pour revenir au calcul automatique sur ce jour.
+async function postClearGardeOverride(dateKey) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear_garde_override", date: dateKey })
+    });
+  } catch (e) {
+    console.warn("Impossible de réinitialiser l'exception de garde dans Notion :", e);
+  }
 }
 
 const CHORE_FREQUENCIES = [

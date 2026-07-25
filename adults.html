@@ -80,6 +80,7 @@
       </button>
       <button class="tab-btn" data-tab="codes">Codes</button>
       <button class="tab-btn" data-tab="recap">Récap</button>
+      <button class="tab-btn" data-tab="garde">🏰 Planning garde</button>
       <button class="tab-btn" data-tab="compte">Mon compte</button>
     </div>
 
@@ -197,6 +198,22 @@
         <h2>🏆 Classement de la semaine</h2>
         <p class="small">Total des étoiles gagnées ces 7 derniers jours (enfants et adultes).</p>
         <div id="recap-table"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-garde">
+      <div class="section">
+        <h2>🏰 Planning de garde</h2>
+        <p class="small">
+          Basé sur le calendrier scolaire (alternance des week-ends, vacances zone B), pas sur Google Calendar.
+          <span id="garde-admin-hint" style="display:none;">Clique sur un jour pour forcer une exception (Maman → Papa → auto).</span>
+        </p>
+        <div class="people-picker" id="garde-child-picker"></div>
+        <div style="display:flex; gap:14px; margin:0.75rem 0; font-size:0.85rem;">
+          <span>👩 Chez Maman</span>
+          <span>👨 Chez Papa</span>
+        </div>
+        <div id="garde-months"></div>
       </div>
     </div>
 
@@ -342,6 +359,153 @@
         const span = document.createElement("span");
         span.textContent = "Aucun enfant configuré.";
         container.appendChild(span);
+      }
+    }
+
+    // Planning de garde : un calendrier par enfant (leur domicile habituel
+    // en semaine diffère), avec exceptions cliquables réservées à l'admin.
+    let activeGardeChildName = null;
+
+    function renderGardeChildPicker() {
+      const container = document.getElementById("garde-child-picker");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const children = data.children || [];
+      if (!activeGardeChildName && children.length > 0) {
+        activeGardeChildName = children[0].name;
+      }
+
+      children.forEach(child => {
+        const btn = document.createElement("button");
+        btn.className = "person-chip" + (child.name === activeGardeChildName ? " active" : "");
+        btn.textContent = `${getPersonAvatar(child)} ${child.name}`;
+        btn.addEventListener("click", () => {
+          activeGardeChildName = child.name;
+          renderGardeChildPicker();
+          renderGardeCalendar();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    // Un clic cycle : auto (calcul automatique) -> maman -> papa -> auto.
+    async function cycleGardeOverride(dateKey, isForced, currentParent) {
+      if (!isForced) {
+        await postSetGardeOverride(dateKey, "maman");
+      } else if (currentParent === "maman") {
+        await postSetGardeOverride(dateKey, "papa");
+      } else {
+        await postClearGardeOverride(dateKey);
+      }
+      data = await loadAppData();
+      renderGardeCalendar();
+    }
+
+    function renderGardeCalendar() {
+      const container = document.getElementById("garde-months");
+      const hint = document.getElementById("garde-admin-hint");
+      if (!container) return;
+      if (hint) hint.style.display = session.isAdmin ? "inline" : "none";
+      container.innerHTML = "";
+
+      const childName = activeGardeChildName;
+      const overrides = data.gardeOverrides || {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dowFmt = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
+      const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+      const firstMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      for (let m = 0; m < 3; m++) {
+        const monthDate = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + m, 1);
+        const year = monthDate.getFullYear(), month = monthDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+
+        const box = document.createElement("div");
+        box.style.marginBottom = "1.25rem";
+
+        const title = document.createElement("h3");
+        title.style.textTransform = "capitalize";
+        title.style.fontSize = "0.95rem";
+        title.style.margin = "0 0 0.5rem";
+        title.textContent = monthFmt.format(monthDate);
+        box.appendChild(title);
+
+        const grid = document.createElement("div");
+        grid.style.display = "grid";
+        grid.style.gridTemplateColumns = "repeat(7, 1fr)";
+        grid.style.gap = "5px";
+
+        dowFmt.forEach(dw => {
+          const cell = document.createElement("div");
+          cell.className = "small";
+          cell.style.textAlign = "center";
+          cell.textContent = dw;
+          grid.appendChild(cell);
+        });
+
+        for (let i = 0; i < firstDow; i++) {
+          grid.appendChild(document.createElement("div"));
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateObj = new Date(year, month, day);
+          const loc = getChildGardeLocation(childName, dateObj, overrides);
+          const isToday = gardeSameDay(dateObj, today);
+          const dateKey = gardeDateKey(dateObj);
+          const isForced = !!overrides[dateKey];
+
+          const cell = document.createElement("div");
+          cell.title = loc.label;
+          cell.style.aspectRatio = "1";
+          cell.style.borderRadius = "9px";
+          cell.style.display = "flex";
+          cell.style.flexDirection = "column";
+          cell.style.alignItems = "center";
+          cell.style.justifyContent = "center";
+          cell.style.fontSize = "0.8rem";
+          cell.style.fontWeight = "600";
+
+          if (loc.parent === "maman") {
+            cell.style.background = "#F76E9C";
+            cell.style.color = "#fff";
+          } else if (loc.parent === "papa") {
+            cell.style.background = "#4A90E2";
+            cell.style.color = "#fff";
+          } else {
+            cell.style.background = "#FAF9FF";
+            cell.style.border = "1px solid var(--color-border)";
+            cell.style.color = "var(--color-text-muted)";
+          }
+          if (isToday) cell.style.boxShadow = "0 0 0 3px var(--color-primary)";
+          if (loc.overridden) cell.style.outline = "2px dashed rgba(255,255,255,0.85)";
+
+          const num = document.createElement("span");
+          num.textContent = day;
+          cell.appendChild(num);
+
+          if (loc.parent) {
+            const who = document.createElement("span");
+            who.style.fontSize = "1rem";
+            who.style.lineHeight = "1";
+            who.textContent = GARDE_PARENT_DISPLAY[loc.parent].emoji;
+            cell.appendChild(who);
+          }
+
+          if (session.isAdmin) {
+            cell.style.cursor = "pointer";
+            cell.addEventListener("click", () => {
+              cycleGardeOverride(dateKey, isForced, overrides[dateKey]);
+            });
+          }
+
+          grid.appendChild(cell);
+        }
+
+        box.appendChild(grid);
+        container.appendChild(box);
       }
     }
 
@@ -1292,6 +1456,9 @@
         setupRestrictedView();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
       }
+
+      renderGardeChildPicker();
+      renderGardeCalendar();
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
