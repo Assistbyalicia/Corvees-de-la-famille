@@ -69,7 +69,7 @@ const defaultData = {
   adults: [],
   chores: [],
   rewards: [],
-  weeklyRecap: [],
+  weeklyRecap: { days: [] },
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -150,7 +150,7 @@ async function loadAppData() {
       adults: mergeById(config.adults, local.adults),
       chores: mergeById(config.chores, local.chores),
       rewards: mergeById(config.rewards, local.rewards),
-      weeklyRecap: config.weeklyRecap || [],
+      weeklyRecap: config.weeklyRecap || { days: [] },
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -345,42 +345,117 @@ async function postUpdateSecurityQuestion(personId, question, answer) {
   }
 }
 
-// Affiche le classement des 7 derniers jours (data.weeklyRecap, calculé côté
-// n8n à partir du Journal Notion) dans la liste #containerId. highlightPersonId
-// (optionnel) met en valeur la ligne de cette personne.
-function renderWeeklyRecap(containerId, data, highlightPersonId) {
-  const list = document.getElementById(containerId);
-  if (!list) return;
-  list.innerHTML = "";
+const WEEKLY_RECAP_WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 
-  const recap = data.weeklyRecap || [];
-  const medals = ["🥇", "🥈", "🥉"];
+function formatWeeklyRecapDay(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${WEEKLY_RECAP_WEEKDAYS[d.getDay()]} ${dd}/${mm}`;
+}
 
-  recap.forEach((entry, index) => {
-    const li = document.createElement("li");
-    if (entry.id === highlightPersonId) {
-      li.style.borderColor = "var(--color-primary)";
-      li.style.background = "#F3F0FD";
-    }
+// Affiche un vrai tableau jour x personne pour les 7 derniers jours
+// (data.weeklyRecap.days, calculé côté n8n à partir du Journal Notion) dans
+// #containerId. `people` filtre les colonnes affichées (ex. seulement les
+// enfants côté kids.html, enfants+adultes côté adults.html) ; les colonnes
+// sont triées par total décroissant. highlightPersonId (optionnel) met en
+// valeur la colonne de cette personne.
+function renderWeeklyRecapTable(containerId, data, people, highlightPersonId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
 
-    const left = document.createElement("span");
-    const prefix = medals[index] || `${index + 1}.`;
-    left.textContent = `${prefix} ${entry.name}`;
+  const days = (data.weeklyRecap && data.weeklyRecap.days) || [];
 
-    const right = document.createElement("span");
-    right.className = "badge";
-    right.textContent = `⭐ ${entry.points}`;
-
-    li.appendChild(left);
-    li.appendChild(right);
-    list.appendChild(li);
-  });
-
-  if (recap.length === 0) {
-    const li = document.createElement("li");
-    li.textContent = "Pas encore de corvées cette semaine.";
-    list.appendChild(li);
+  if (!people || people.length === 0 || days.length === 0) {
+    const p = document.createElement("p");
+    p.className = "small";
+    p.textContent = "Pas encore de données pour cette semaine.";
+    container.appendChild(p);
+    return;
   }
+
+  const totalsByPerson = {};
+  people.forEach(person => {
+    totalsByPerson[person.id] = days.reduce(
+      (sum, day) => sum + ((day.points && day.points[person.id]) || 0),
+      0
+    );
+  });
+  const sortedPeople = [...people].sort(
+    (a, b) => totalsByPerson[b.id] - totalsByPerson[a.id]
+  );
+
+  container.style.overflowX = "auto";
+
+  const table = document.createElement("table");
+
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  const thDay = document.createElement("th");
+  thDay.textContent = "Jour";
+  headRow.appendChild(thDay);
+  sortedPeople.forEach(person => {
+    const th = document.createElement("th");
+    th.textContent = person.name;
+    if (person.id === highlightPersonId) th.style.color = "var(--color-primary)";
+    headRow.appendChild(th);
+  });
+  const thTotal = document.createElement("th");
+  thTotal.textContent = "Total";
+  headRow.appendChild(thTotal);
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  days.forEach(day => {
+    const tr = document.createElement("tr");
+
+    const tdDay = document.createElement("td");
+    tdDay.textContent = formatWeeklyRecapDay(day.date);
+    tr.appendChild(tdDay);
+
+    let dayTotal = 0;
+    sortedPeople.forEach(person => {
+      const points = (day.points && day.points[person.id]) || 0;
+      dayTotal += points;
+
+      const td = document.createElement("td");
+      td.textContent = points ? `⭐ ${points}` : "–";
+      tr.appendChild(td);
+    });
+
+    const tdDayTotal = document.createElement("td");
+    tdDayTotal.textContent = dayTotal ? `⭐ ${dayTotal}` : "–";
+    tr.appendChild(tdDayTotal);
+
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  const tfoot = document.createElement("tfoot");
+  const footRow = document.createElement("tr");
+  const tdLabel = document.createElement("td");
+  tdLabel.textContent = "Total";
+  tdLabel.style.fontWeight = "700";
+  footRow.appendChild(tdLabel);
+
+  let grandTotal = 0;
+  sortedPeople.forEach(person => {
+    const td = document.createElement("td");
+    td.style.fontWeight = "700";
+    td.textContent = `⭐ ${totalsByPerson[person.id]}`;
+    grandTotal += totalsByPerson[person.id];
+    footRow.appendChild(td);
+  });
+  const tdGrandTotal = document.createElement("td");
+  tdGrandTotal.style.fontWeight = "700";
+  tdGrandTotal.textContent = `⭐ ${grandTotal}`;
+  footRow.appendChild(tdGrandTotal);
+  tfoot.appendChild(footRow);
+  table.appendChild(tfoot);
+
+  container.appendChild(table);
 }
 
 // Câble un jeu d'onglets partagé (.tab-btn / .tab-panel, voir shared.css).

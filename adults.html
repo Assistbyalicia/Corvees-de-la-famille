@@ -15,24 +15,6 @@
       max-width: 800px;
       width: 100%;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-    th, td {
-      border-bottom: 1px solid var(--color-border);
-      padding: 0.6rem 0.5rem;
-      text-align: left;
-    }
-    th {
-      background: #FAF9FF;
-      color: var(--color-text-muted);
-      font-weight: 700;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
     .people-picker {
       display: flex;
       gap: 0.5rem;
@@ -178,7 +160,7 @@
       <div class="section">
         <h2>🏆 Classement de la semaine</h2>
         <p class="small">Total des étoiles gagnées ces 7 derniers jours (enfants et adultes).</p>
-        <ul class="list" id="recap-list"></ul>
+        <div id="recap-table"></div>
       </div>
     </div>
 
@@ -787,14 +769,14 @@
         renderChoresList();
         renderRewardsList();
         renderCodesList();
-        renderWeeklyRecap("recap-list", data);
+        renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])]);
         setupAddChoreForm();
         setupAddRewardForm();
       } else {
         data.activeAdultId = session.personId;
         setupTabs("adultes");
         setupRestrictedView();
-        renderWeeklyRecap("recap-list", data, session.personId);
+        renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
       }
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
