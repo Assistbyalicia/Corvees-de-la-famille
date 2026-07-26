@@ -348,3 +348,91 @@ tfoot td {
 .garde-cell.clickable:hover {
   transform: translateY(-2px);
 }
+
+/* Étoile qui "pop" brièvement quand une corvée est validée. */
+@keyframes star-pop-float {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -6px) scale(1.15); }
+  75% { opacity: 1; transform: translate(-50%, -26px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -40px) scale(0.9); }
+}
+.star-pop {
+  position: fixed;
+  transform: translate(-50%, 0);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #F5A623;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: star-pop-float 0.9s ease-out forwards;
+  z-index: 20;
+}
+
+/* Confettis à l'achat d'une récompense. */
+@keyframes confetti-fall {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  100% { opacity: 0; transform: translate(var(--confetti-x, 0), 120px) rotate(var(--confetti-r, 180deg)); }
+}
+.confetti-piece {
+  position: fixed;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 9999;
+  animation: confetti-fall 1.1s ease-in forwards;
+}
+
+/* Mode sombre : suit le réglage du système. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #9B8CFB;
+    --color-text: #EDEAF6;
+    --color-text-muted: #A79FC4;
+    --color-border: #3A3450;
+    --color-danger-bg: #3B1E24;
+    --color-danger-text: #F4A3AD;
+    --color-danger-border: #6B2A35;
+    --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.35);
+    --shadow-card-hover: 0 8px 26px rgba(0, 0, 0, 0.45);
+  }
+  body {
+    background: radial-gradient(circle at 10% 0%, #241f3a 0%, transparent 45%),
+      radial-gradient(circle at 90% 10%, #2c1f33 0%, transparent 40%),
+      #16141f;
+  }
+  .section,
+  .tabs,
+  .garde-month,
+  table {
+    background: #201c2c;
+  }
+  .list li,
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="date"],
+  select,
+  th,
+  tfoot td,
+  .garde-cell.none {
+    background: #29243a;
+  }
+  button {
+    background: #29243a;
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+  .btn-secondary {
+    background: #29243a;
+  }
+  .tab-btn:hover {
+    background: #2c2740;
+  }
+  .offline-banner {
+    background: #3B2F1A;
+    color: #F5D492;
+    border-color: #5A4726;
+  }
+}

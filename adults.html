@@ -220,7 +220,31 @@
           <span><i class="dot" style="background:#F76E9C;"></i>Chez Maman</span>
           <span><i class="dot" style="background:#4A90E2;"></i>Chez Papa</span>
         </div>
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+          <button id="garde-prev-btn" class="btn-secondary">◀</button>
+          <button id="garde-today-btn" class="btn-secondary">Aujourd'hui</button>
+          <button id="garde-next-btn" class="btn-secondary">▶</button>
+        </div>
         <div id="garde-months"></div>
+      </div>
+
+      <div class="section" id="garde-blocks-admin" style="display:none;">
+        <h3>Gérer les blocs de vacances</h3>
+        <p class="small">
+          Un bloc = une période continue (petites ou grandes vacances) chez un seul parent.
+          En dehors de tout bloc, l'alternance normale des week-ends s'applique.
+        </p>
+        <ul class="list" id="garde-blocks-list"></ul>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem; align-items:center;">
+          <input id="new-block-label" type="text" placeholder="Nom (ex. Toussaint 2027 — 1ère moitié)" style="flex:2; padding:0.25rem;" />
+          <input id="new-block-start" type="date" style="padding:0.25rem;" />
+          <input id="new-block-end" type="date" style="padding:0.25rem;" />
+          <select id="new-block-parent" style="padding:0.25rem;">
+            <option value="maman">Maman</option>
+            <option value="papa">Papa</option>
+          </select>
+        </div>
+        <button id="add-block-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </div>
     </div>
 
@@ -409,85 +433,104 @@
       renderGardeCalendar();
     }
 
+    let gardeMonthOffset = 0;
+
     function renderGardeCalendar() {
       const container = document.getElementById("garde-months");
       const hint = document.getElementById("garde-admin-hint");
       if (!container) return;
       if (hint) hint.style.display = session.isAdmin ? "inline" : "none";
-      container.innerHTML = "";
 
-      const childName = activeGardeChildName;
       const overrides = data.gardeOverrides || {};
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dowFmt = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
-      const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
-      const firstMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const blocks = data.gardeBlocks || [];
+      const onCellClick = session.isAdmin ? cycleGardeOverride : null;
+      renderGardeMonths(container, activeGardeChildName, overrides, blocks, gardeMonthOffset, onCellClick);
+    }
 
-      for (let m = 0; m < 3; m++) {
-        const monthDate = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + m, 1);
-        const year = monthDate.getFullYear(), month = monthDate.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+    function setupGardeNav() {
+      const prevBtn = document.getElementById("garde-prev-btn");
+      const nextBtn = document.getElementById("garde-next-btn");
+      const todayBtn = document.getElementById("garde-today-btn");
+      if (!prevBtn || !nextBtn || !todayBtn) return;
+      prevBtn.addEventListener("click", () => { gardeMonthOffset -= 1; renderGardeCalendar(); });
+      nextBtn.addEventListener("click", () => { gardeMonthOffset += 1; renderGardeCalendar(); });
+      todayBtn.addEventListener("click", () => { gardeMonthOffset = 0; renderGardeCalendar(); });
+    }
 
-        const box = document.createElement("div");
-        box.className = "garde-month";
+    // Gestion des blocs de vacances (admin uniquement) : ajout/suppression
+    // stockés dans Notion, pour ne plus dépendre d'une mise à jour du code
+    // chaque année.
+    function renderGardeBlocksAdmin() {
+      const section = document.getElementById("garde-blocks-admin");
+      const list = document.getElementById("garde-blocks-list");
+      if (!section || !list) return;
 
-        const title = document.createElement("h3");
-        title.textContent = monthFmt.format(monthDate);
-        box.appendChild(title);
+      if (!session.isAdmin) {
+        section.style.display = "none";
+        return;
+      }
+      section.style.display = "block";
+      list.innerHTML = "";
 
-        const grid = document.createElement("div");
-        grid.className = "garde-grid";
+      const blocks = data.gardeBlocks || [];
+      if (blocks.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun bloc de vacances configuré.";
+        list.appendChild(li);
+      }
 
-        dowFmt.forEach(dw => {
-          const cell = document.createElement("div");
-          cell.className = "garde-dow";
-          cell.textContent = dw;
-          grid.appendChild(cell);
+      blocks.forEach(block => {
+        const li = document.createElement("li");
+
+        const label = document.createElement("span");
+        const parentText = block.parent === "maman" ? "Maman" : "Papa";
+        label.textContent = `${block.label || "Vacances"} — ${parentText} (${block.start} → ${block.end})`;
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn-danger";
+        delBtn.textContent = "Supprimer";
+        delBtn.addEventListener("click", async () => {
+          if (!confirm(`Supprimer le bloc "${block.label}" ?`)) return;
+          await postDeleteGardeBlock(block.id);
+          data = await loadAppData();
+          renderGardeBlocksAdmin();
+          renderGardeCalendar();
         });
 
-        for (let i = 0; i < firstDow; i++) {
-          grid.appendChild(document.createElement("div"));
+        li.appendChild(label);
+        li.appendChild(delBtn);
+        list.appendChild(li);
+      });
+    }
+
+    function setupAddBlockForm() {
+      const btn = document.getElementById("add-block-btn");
+      const labelInput = document.getElementById("new-block-label");
+      const startInput = document.getElementById("new-block-start");
+      const endInput = document.getElementById("new-block-end");
+      const parentSelect = document.getElementById("new-block-parent");
+      if (!btn || !labelInput || !startInput || !endInput || !parentSelect) return;
+
+      btn.addEventListener("click", async () => {
+        const label = labelInput.value.trim();
+        const start = startInput.value;
+        const end = endInput.value;
+        const parent = parentSelect.value;
+        if (!label || !start || !end) return;
+        if (start > end) {
+          alert("La date de début doit être avant la date de fin.");
+          return;
         }
 
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateObj = new Date(year, month, day);
-          const loc = getChildGardeLocation(childName, dateObj, overrides);
-          const isToday = gardeSameDay(dateObj, today);
-          const dateKey = gardeDateKey(dateObj);
-          const isForced = !!overrides[dateKey];
+        await postAddGardeBlock(label, start, end, parent);
+        data = await loadAppData();
+        renderGardeBlocksAdmin();
+        renderGardeCalendar();
 
-          const cell = document.createElement("div");
-          cell.title = loc.label;
-          cell.className = "garde-cell " + (loc.parent || "none");
-          if (isToday) cell.classList.add("today");
-          if (loc.overridden) cell.classList.add("overridden");
-
-          const num = document.createElement("span");
-          num.textContent = day;
-          cell.appendChild(num);
-
-          if (loc.parent) {
-            const who = document.createElement("span");
-            who.className = "who";
-            who.textContent = GARDE_PARENT_DISPLAY[loc.parent].emoji;
-            cell.appendChild(who);
-          }
-
-          if (session.isAdmin) {
-            cell.classList.add("clickable");
-            cell.addEventListener("click", () => {
-              cycleGardeOverride(dateKey, isForced, overrides[dateKey]);
-            });
-          }
-
-          grid.appendChild(cell);
-        }
-
-        box.appendChild(grid);
-        container.appendChild(box);
-      }
+        labelInput.value = "";
+        startInput.value = "";
+        endInput.value = "";
+      });
     }
 
     function renderChildrenDetailSections() {
@@ -527,6 +570,17 @@
         badgesRow.appendChild(span);
       }
       container.appendChild(badgesRow);
+
+      const chartTitle = document.createElement("p");
+      chartTitle.className = "small";
+      chartTitle.style.margin = "0 0 0.25rem";
+      chartTitle.textContent = "Étoiles gagnées par jour (historique récent) :";
+      container.appendChild(chartTitle);
+
+      const chartContainer = document.createElement("div");
+      chartContainer.style.marginBottom = "0.75rem";
+      container.appendChild(chartContainer);
+      renderStarsChart(chartContainer, data.choreHistory || [], child.id);
 
       const choresForChild = (data.chores || []).filter(chore => {
         if (!isChoreVisibleToday(chore)) return false;
@@ -1439,7 +1493,10 @@
       }
 
       renderGardeChildPicker();
+      setupGardeNav();
       renderGardeCalendar();
+      renderGardeBlocksAdmin();
+      setupAddBlockForm();
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);

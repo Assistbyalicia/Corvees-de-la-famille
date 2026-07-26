@@ -108,6 +108,8 @@
         <div class="progress-fill" id="level-progress-fill"></div>
       </div>
       <div id="badges-list" style="margin-top:0.6rem; display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
+      <p class="small" style="margin:0.75rem 0 0.25rem;">Étoiles gagnées par jour :</p>
+      <div id="stars-chart"></div>
     </div>
 
     <div class="section" id="garde-today-section" style="display:none;">
@@ -156,6 +158,11 @@
       <div class="garde-legend">
         <span><i class="dot" style="background:#F76E9C;"></i>Chez Maman</span>
         <span><i class="dot" style="background:#4A90E2;"></i>Chez Papa</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+        <button id="garde-prev-btn-kids" class="btn-secondary">◀</button>
+        <button id="garde-today-btn-kids" class="btn-secondary">Aujourd'hui</button>
+        <button id="garde-next-btn-kids" class="btn-secondary">▶</button>
       </div>
       <div id="garde-months-kids"></div>
     </div>
@@ -365,6 +372,8 @@
         span.textContent = "Pas encore de badge débloqué.";
         badgesList.appendChild(span);
       }
+
+      renderStarsChart(document.getElementById("stars-chart"), data.choreHistory || [], child.id);
     }
 
     function renderGardeToday() {
@@ -375,7 +384,7 @@
       const child = (data.children || []).find(c => c.id === data.activeChildId);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const loc = child ? getChildGardeLocation(child.name, today, data.gardeOverrides || {}) : null;
+      const loc = child ? getChildGardeLocation(child.name, today, data.gardeOverrides || {}, data.gardeBlocks || []) : null;
 
       if (!loc || !loc.parent) {
         section.style.display = "none";
@@ -389,10 +398,11 @@
 
     // Vue calendrier en lecture seule pour l'enfant actif (pas de clic : les
     // exceptions ne se posent que côté adultes).
+    let gardeMonthOffsetKids = 0;
+
     function renderGardeCalendarKids() {
       const container = document.getElementById("garde-months-kids");
       if (!container) return;
-      container.innerHTML = "";
 
       const child = (data.children || []).find(c => c.id === data.activeChildId);
       if (!child) {
@@ -401,67 +411,18 @@
       }
 
       const overrides = data.gardeOverrides || {};
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dowFmt = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
-      const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
-      const firstMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const blocks = data.gardeBlocks || [];
+      renderGardeMonths(container, child.name, overrides, blocks, gardeMonthOffsetKids, null);
+    }
 
-      for (let m = 0; m < 3; m++) {
-        const monthDate = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + m, 1);
-        const year = monthDate.getFullYear(), month = monthDate.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
-
-        const box = document.createElement("div");
-        box.className = "garde-month";
-
-        const title = document.createElement("h3");
-        title.textContent = monthFmt.format(monthDate);
-        box.appendChild(title);
-
-        const grid = document.createElement("div");
-        grid.className = "garde-grid";
-
-        dowFmt.forEach(dw => {
-          const cell = document.createElement("div");
-          cell.className = "garde-dow";
-          cell.textContent = dw;
-          grid.appendChild(cell);
-        });
-
-        for (let i = 0; i < firstDow; i++) {
-          grid.appendChild(document.createElement("div"));
-        }
-
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateObj = new Date(year, month, day);
-          const loc = getChildGardeLocation(child.name, dateObj, overrides);
-          const isToday = gardeSameDay(dateObj, today);
-
-          const cell = document.createElement("div");
-          cell.title = loc.label;
-          cell.className = "garde-cell " + (loc.parent || "none");
-          if (isToday) cell.classList.add("today");
-          if (loc.overridden) cell.classList.add("overridden");
-
-          const num = document.createElement("span");
-          num.textContent = day;
-          cell.appendChild(num);
-
-          if (loc.parent) {
-            const who = document.createElement("span");
-            who.className = "who";
-            who.textContent = GARDE_PARENT_DISPLAY[loc.parent].emoji;
-            cell.appendChild(who);
-          }
-
-          grid.appendChild(cell);
-        }
-
-        box.appendChild(grid);
-        container.appendChild(box);
-      }
+    function setupGardeNavKids() {
+      const prevBtn = document.getElementById("garde-prev-btn-kids");
+      const nextBtn = document.getElementById("garde-next-btn-kids");
+      const todayBtn = document.getElementById("garde-today-btn-kids");
+      if (!prevBtn || !nextBtn || !todayBtn) return;
+      prevBtn.addEventListener("click", () => { gardeMonthOffsetKids -= 1; renderGardeCalendarKids(); });
+      nextBtn.addEventListener("click", () => { gardeMonthOffsetKids += 1; renderGardeCalendarKids(); });
+      todayBtn.addEventListener("click", () => { gardeMonthOffsetKids = 0; renderGardeCalendarKids(); });
     }
 
     function renderChores() {
@@ -509,6 +470,7 @@
           if (isNowCompleted) {
             state.completedChores.push(chore.id);
             state.stars += chore.stars;
+            showStarPop(btn, `+${chore.stars}⭐`);
             await postChoreAction(data.activeChildId, chore.id, "complete");
 
             if ((chore.frequency || "quotidien") === "ponctuel") {
@@ -583,6 +545,7 @@
             if (state.stars < reward.cost) return;
             state.stars -= reward.cost;
             state.purchasedRewards.push(reward.id);
+            showConfetti();
             await postRewardAction(data.activeChildId, reward.id, "purchase");
             saveData(data);
             renderAll();
@@ -707,6 +670,7 @@
       }
 
       renderOfflineBadge(data);
+      setupGardeNavKids();
       renderAll();
       renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);
       setupTabs("quetes");

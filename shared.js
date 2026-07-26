@@ -84,6 +84,7 @@ const defaultData = {
   rewardHistory: [],
   choreHistory: [],
   gardeOverrides: {},
+  gardeBlocks: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -168,6 +169,7 @@ async function loadAppData() {
       rewardHistory: config.rewardHistory || [],
       choreHistory: config.choreHistory || [],
       gardeOverrides: config.gardeOverrides || {},
+      gardeBlocks: config.gardeBlocks || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -496,36 +498,6 @@ function getPersonAvatar(person) {
 // chaque semaine.
 const GARDE_WEEKEND_ANCHOR = { friday: "2026-06-26", parent: "papa" };
 
-// Petites vacances (Toussaint, Noël, Hiver, Printemps) — dates ZONE B.
-// start = premier jour de vacances (le samedi), end = jour de la reprise
-// (le lundi). firstHalfParent = qui a les filles la 1ère moitié (la
-// bascule se fait un dimanche soir, au milieu).
-const GARDE_PETITES_VACANCES = [
-  { name: "Vacances de la Toussaint", start: "2026-10-17", end: "2026-11-02", firstHalfParent: "papa" },
-  { name: "Vacances de Noël",         start: "2026-12-19", end: "2027-01-04", firstHalfParent: "papa" },
-  { name: "Vacances d'Hiver",         start: "2027-02-20", end: "2027-03-08", firstHalfParent: "maman" },
-  { name: "Vacances de Printemps",    start: "2027-04-17", end: "2027-05-03", firstHalfParent: "maman" }
-];
-
-// Grandes vacances d'été : blocs de garde continue à dates EXACTES (les
-// vraies dates convenues avec l'autre parent chaque année, pas une formule
-// à durée fixe — un bloc peut se terminer un vendredi, un autre un
-// dimanche). start/end sont inclus (le parent a les filles toute la
-// journée du "end", la bascule se fait ce soir-là).
-// En dehors de ces blocs (avant le 1er, entre deux blocs, après le
-// dernier), le week-end suit l'alternance normale et la semaine reste au
-// domicile habituel de chaque enfant.
-const GARDE_GRANDES_VACANCES = {
-  vacancesStart: "2026-07-03",
-  rentree: "2026-09-01",
-  blocks: [
-    { start: "2026-07-06", end: "2026-07-17", parent: "papa" },
-    { start: "2026-07-20", end: "2026-08-02", parent: "maman" },
-    { start: "2026-08-03", end: "2026-08-16", parent: "papa" },
-    { start: "2026-08-17", end: "2026-08-30", parent: "maman" }
-  ]
-};
-
 // Domicile habituel de chaque enfant en semaine (hors week-end/vacances).
 const GARDE_CHILD_HOME_PARENT = { Roxanne: "maman", Elena: "papa" };
 
@@ -559,16 +531,6 @@ function gardeOpposite(p) {
   return p === "papa" ? "maman" : "papa";
 }
 
-// Pour une vacance donnée, calcule la date de bascule (dimanche le plus
-// proche du milieu).
-function gardeMidpointSunday(start, end) {
-  const total = gardeDaysBetween(start, end);
-  const roughMid = gardeAddDays(start, Math.round(total / 2));
-  const dow = roughMid.getDay();
-  const offsetToSunday = dow === 0 ? 0 : (dow <= 3 ? -dow : 7 - dow);
-  return gardeAddDays(roughMid, offsetToSunday);
-}
-
 function gardeFridayOfWeek(date) {
   const r = new Date(date);
   const dow = r.getDay();
@@ -588,56 +550,33 @@ function gardeNormalWeekendParent(date) {
 
 // Renvoie { parent: "maman"|"papa"|null, period, label } pour une date
 // donnée. parent = null hors week-end/vacances (jour d'école normal,
-// dépend du domicile habituel de l'enfant). overrides est la map
-// gardeOverrides ({ "AAAA-MM-JJ": "maman"|"papa" }) posée à la main par
-// l'admin, qui prend toujours le dessus sur le calcul automatique.
-function getSharedGardeLocation(date, overrides) {
+// dépend du domicile habituel de l'enfant).
+// - overrides est la map gardeOverrides ({ "AAAA-MM-JJ": "maman"|"papa" })
+//   posée à la main par l'admin (clic sur un jour), qui prend toujours le
+//   dessus.
+// - blocks est la liste gardeBlocks ({ start, end, parent, label }[]) qui
+//   couvre les vacances scolaires (petites et grandes) : chaque bloc est
+//   géré depuis Notion via l'appli, pas codé en dur. En dehors de tout
+//   bloc, le week-end suit l'alternance normale et la semaine reste au
+//   domicile habituel de chaque enfant.
+function getSharedGardeLocation(date, overrides, blocks) {
   const key = gardeDateKey(date);
   if (overrides && overrides[key]) {
     return { parent: overrides[key], period: "Modifié", label: "Modifié manuellement", overridden: true };
   }
 
-  const gvStart = gardeParseDate(GARDE_GRANDES_VACANCES.vacancesStart);
-  const gvRentree = gardeParseDate(GARDE_GRANDES_VACANCES.rentree);
-
-  if (date >= gvStart && date < gvRentree) {
-    const dow = date.getDay();
-    const isWeekend = dow === 5 || dow === 6 || dow === 0;
-
-    // Un bloc de garde continue (dates exactes) couvre entièrement sa
-    // semaine, week-ends internes compris : il n'y a pas d'alternance
-    // normale à l'intérieur d'un bloc.
-    for (let i = 0; i < GARDE_GRANDES_VACANCES.blocks.length; i++) {
-      const block = GARDE_GRANDES_VACANCES.blocks[i];
-      const start = gardeParseDate(block.start), end = gardeParseDate(block.end);
-      if (date >= start && date <= end) {
-        const label = isWeekend
-          ? `Grandes vacances — bloc ${i + 1} (week-end)`
-          : `Grandes vacances — bloc ${i + 1}`;
-        return { parent: block.parent, period: "Grandes vacances", label };
-      }
-    }
-
-    // Hors bloc (avant le 1er, entre deux blocs, après le dernier) : le
-    // week-end suit l'alternance normale, la semaine reste au domicile
-    // habituel de chaque enfant.
-    if (isWeekend) {
-      return { parent: gardeNormalWeekendParent(date), period: "Grandes vacances", label: "Grandes vacances (week-end)" };
-    }
-    return { parent: null, period: "Grandes vacances", label: "Grandes vacances" };
-  }
-
-  for (const v of GARDE_PETITES_VACANCES) {
-    const start = gardeParseDate(v.start), end = gardeParseDate(v.end);
-    if (date >= start && date < end) {
-      const mid = gardeMidpointSunday(start, end);
-      const parent = date < mid ? v.firstHalfParent : gardeOpposite(v.firstHalfParent);
-      return { parent, period: v.name, label: `${v.name} (${date < mid ? "1ère" : "2ème"} moitié)` };
-    }
-  }
-
   const dow = date.getDay();
-  if (dow === 5 || dow === 6 || dow === 0) {
+  const isWeekend = dow === 5 || dow === 6 || dow === 0;
+
+  for (const block of (blocks || [])) {
+    const start = gardeParseDate(block.start), end = gardeParseDate(block.end);
+    if (date >= start && date <= end) {
+      const label = isWeekend && block.label ? `${block.label} (week-end)` : (block.label || "Vacances");
+      return { parent: block.parent, period: "Vacances", label };
+    }
+  }
+
+  if (isWeekend) {
     return { parent: gardeNormalWeekendParent(date), period: "Week-end", label: "Week-end" };
   }
   return { parent: null, period: "Semaine", label: "Semaine (chacune chez son domicile habituel)" };
@@ -645,8 +584,8 @@ function getSharedGardeLocation(date, overrides) {
 
 // Position spécifique d'un enfant, qui tient compte de son domicile par
 // défaut en semaine (childName = person.name, ex. "Roxanne").
-function getChildGardeLocation(childName, date, overrides) {
-  const shared = getSharedGardeLocation(date, overrides);
+function getChildGardeLocation(childName, date, overrides, blocks) {
+  const shared = getSharedGardeLocation(date, overrides, blocks);
   if (shared.parent) return shared;
   const homeParent = GARDE_CHILD_HOME_PARENT[childName];
   if (!homeParent) return { parent: null, period: shared.period, label: shared.label };
@@ -679,6 +618,186 @@ async function postClearGardeOverride(dateKey) {
   } catch (e) {
     console.warn("Impossible de réinitialiser l'exception de garde dans Notion :", e);
   }
+}
+
+// action: "add_garde_block" — ajoute un bloc de vacances (petites ou
+// grandes) dans Notion, pour que l'admin configure les dates de garde
+// depuis l'appli sans passer par du code.
+async function postAddGardeBlock(label, start, end, parent) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add_garde_block", label, start, end, parent })
+    });
+  } catch (e) {
+    console.warn("Impossible d'ajouter le bloc de vacances dans Notion :", e);
+  }
+}
+
+// action: "delete_garde_block" — supprime un bloc de vacances.
+async function postDeleteGardeBlock(blockId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_garde_block", blockId })
+    });
+  } catch (e) {
+    console.warn("Impossible de supprimer le bloc de vacances dans Notion :", e);
+  }
+}
+
+// Rendu du calendrier de garde (3 mois, décalables via monthOffset) dans
+// container, pour l'enfant childName. Partagé entre adults.html (avec
+// clic admin) et kids.html (lecture seule, onCellClick = null).
+function renderGardeMonths(container, childName, overrides, blocks, monthOffset, onCellClick) {
+  container.innerHTML = "";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dowFmt = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
+  const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+  const firstMonth = new Date(today.getFullYear(), today.getMonth() + (monthOffset || 0), 1);
+
+  for (let m = 0; m < 3; m++) {
+    const monthDate = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + m, 1);
+    const year = monthDate.getFullYear(), month = monthDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+
+    const box = document.createElement("div");
+    box.className = "garde-month";
+
+    const title = document.createElement("h3");
+    title.textContent = monthFmt.format(monthDate);
+    box.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.className = "garde-grid";
+
+    dowFmt.forEach(dw => {
+      const cell = document.createElement("div");
+      cell.className = "garde-dow";
+      cell.textContent = dw;
+      grid.appendChild(cell);
+    });
+
+    for (let i = 0; i < firstDow; i++) {
+      grid.appendChild(document.createElement("div"));
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(year, month, day);
+      const loc = getChildGardeLocation(childName, dateObj, overrides, blocks);
+      const isToday = gardeSameDay(dateObj, today);
+      const dateKey = gardeDateKey(dateObj);
+      const isForced = !!(overrides && overrides[dateKey]);
+
+      const cell = document.createElement("div");
+      cell.title = loc.label;
+      cell.className = "garde-cell " + (loc.parent || "none");
+      if (isToday) cell.classList.add("today");
+      if (loc.overridden) cell.classList.add("overridden");
+
+      const num = document.createElement("span");
+      num.textContent = day;
+      cell.appendChild(num);
+
+      if (loc.parent) {
+        const who = document.createElement("span");
+        who.className = "who";
+        who.textContent = GARDE_PARENT_DISPLAY[loc.parent].emoji;
+        cell.appendChild(who);
+      }
+
+      if (onCellClick) {
+        cell.classList.add("clickable");
+        cell.addEventListener("click", () => onCellClick(dateKey, isForced, overrides && overrides[dateKey]));
+      }
+
+      grid.appendChild(cell);
+    }
+
+    box.appendChild(grid);
+    container.appendChild(box);
+  }
+}
+
+// Petite étoile qui "pop" et s'envole au-dessus de anchorEl (le bouton
+// "Valider" cliqué), purement décoratif.
+function showStarPop(anchorEl, text) {
+  if (!anchorEl) return;
+  const rect = anchorEl.getBoundingClientRect();
+  const span = document.createElement("span");
+  span.className = "star-pop";
+  span.textContent = text || "⭐";
+  span.style.left = `${rect.left + rect.width / 2}px`;
+  span.style.top = `${rect.top}px`;
+  document.body.appendChild(span);
+  setTimeout(() => span.remove(), 950);
+}
+
+// Petite pluie de confettis, déclenchée à l'achat d'une récompense.
+function showConfetti() {
+  const colors = ["#F76E9C", "#6C5CE7", "#F5A623", "#22C55E", "#4A90E2"];
+  for (let i = 0; i < 24; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    piece.style.left = Math.random() * 100 + "vw";
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.setProperty("--confetti-x", (Math.random() * 80 - 40) + "px");
+    piece.style.setProperty("--confetti-r", (Math.random() * 360) + "deg");
+    piece.style.animationDelay = (Math.random() * 0.2) + "s";
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 1400);
+  }
+}
+
+// Petit graphique en barres (SVG, sans librairie) des étoiles gagnées par
+// jour pour une personne, à partir de choreHistory (30 corvées les plus
+// récentes tous enfants confondus, donc la fenêtre visible dépend de
+// l'activité générale de la famille, pas d'une plage de dates fixe).
+function renderStarsChart(container, choreHistory, personId) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const byDate = {};
+  (choreHistory || []).forEach(entry => {
+    if (entry.personId !== personId) return;
+    const day = (entry.date || "").slice(0, 10);
+    if (!day) return;
+    byDate[day] = (byDate[day] || 0) + (entry.stars || 0);
+  });
+
+  const days = Object.keys(byDate).sort();
+  if (days.length === 0) {
+    container.innerHTML = '<p class="small">Pas encore assez d\'historique pour un graphique.</p>';
+    return;
+  }
+
+  const max = Math.max(...days.map(d => byDate[d]), 1);
+  const width = 320, height = 110, chartBottom = 90, gap = 4;
+  const barWidth = Math.max(6, (width - gap * (days.length - 1)) / days.length);
+  const showLabelEvery = days.length > 10 ? Math.ceil(days.length / 10) : 1;
+
+  let svg = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="width:100%; height:110px;">`;
+  days.forEach((day, i) => {
+    const value = byDate[day];
+    const barHeight = Math.max(2, (value / max) * (chartBottom - 10));
+    const x = i * (barWidth + gap);
+    const y = chartBottom - barHeight;
+    const dateLabel = new Date(day + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+
+    svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="3" fill="#6C5CE7"><title>${dateLabel} : ${value}⭐</title></rect>`;
+    svg += `<text x="${x + barWidth / 2}" y="${y - 3}" font-size="9" text-anchor="middle" fill="#8A84A6">${value}</text>`;
+    if (i % showLabelEvery === 0) {
+      svg += `<text x="${x + barWidth / 2}" y="${chartBottom + 12}" font-size="8" text-anchor="middle" fill="#8A84A6">${dateLabel}</text>`;
+    }
+  });
+  svg += `</svg>`;
+
+  container.innerHTML = svg;
 }
 
 const CHORE_FREQUENCIES = [
