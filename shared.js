@@ -507,13 +507,23 @@ const GARDE_PETITES_VACANCES = [
   { name: "Vacances de Printemps",    start: "2027-04-17", end: "2027-05-03", firstHalfParent: "maman" }
 ];
 
-// Grandes vacances d'été : blocs d'environ 15 jours, bascule le dimanche soir.
+// Grandes vacances d'été : blocs de garde continue à dates EXACTES (les
+// vraies dates convenues avec l'autre parent chaque année, pas une formule
+// à durée fixe — un bloc peut se terminer un vendredi, un autre un
+// dimanche). start/end sont inclus (le parent a les filles toute la
+// journée du "end", la bascule se fait ce soir-là).
+// En dehors de ces blocs (avant le 1er, entre deux blocs, après le
+// dernier), le week-end suit l'alternance normale et la semaine reste au
+// domicile habituel de chaque enfant.
 const GARDE_GRANDES_VACANCES = {
   vacancesStart: "2026-07-03",
-  blockAnchorStart: "2026-07-06",
-  firstBlockParent: "papa",
-  blockLengthDays: 14,
-  rentree: "2026-09-01"
+  rentree: "2026-09-01",
+  blocks: [
+    { start: "2026-07-06", end: "2026-07-17", parent: "papa" },
+    { start: "2026-07-20", end: "2026-08-02", parent: "maman" },
+    { start: "2026-08-03", end: "2026-08-16", parent: "papa" },
+    { start: "2026-08-17", end: "2026-08-30", parent: "maman" }
+  ]
 };
 
 // Domicile habituel de chaque enfant en semaine (hors week-end/vacances).
@@ -589,27 +599,32 @@ function getSharedGardeLocation(date, overrides) {
 
   const gvStart = gardeParseDate(GARDE_GRANDES_VACANCES.vacancesStart);
   const gvRentree = gardeParseDate(GARDE_GRANDES_VACANCES.rentree);
-  const gvAnchorStart = gardeParseDate(GARDE_GRANDES_VACANCES.blockAnchorStart);
 
   if (date >= gvStart && date < gvRentree) {
     const dow = date.getDay();
-    // Entre la fin des cours et le début du 1er bloc plein (l'extrémité de
-    // début de vacances), le week-end suit encore l'alternance normale.
-    if (date < gvAnchorStart) {
-      if (dow === 5 || dow === 6 || dow === 0) {
-        return { parent: gardeNormalWeekendParent(date), period: "Grandes vacances", label: "Grandes vacances (week-end)" };
+    const isWeekend = dow === 5 || dow === 6 || dow === 0;
+
+    // Un bloc de garde continue (dates exactes) couvre entièrement sa
+    // semaine, week-ends internes compris : il n'y a pas d'alternance
+    // normale à l'intérieur d'un bloc.
+    for (let i = 0; i < GARDE_GRANDES_VACANCES.blocks.length; i++) {
+      const block = GARDE_GRANDES_VACANCES.blocks[i];
+      const start = gardeParseDate(block.start), end = gardeParseDate(block.end);
+      if (date >= start && date <= end) {
+        const label = isWeekend
+          ? `Grandes vacances — bloc ${i + 1} (week-end)`
+          : `Grandes vacances — bloc ${i + 1}`;
+        return { parent: block.parent, period: "Grandes vacances", label };
       }
-      return { parent: null, period: "Grandes vacances", label: "Grandes vacances" };
     }
-    // À partir du 1er bloc plein, chaque bloc dure exactement 2 semaines :
-    // les week-ends internes à un bloc restent chez le même parent que le
-    // reste de la semaine (ils ne suivent plus l'alternance normale).
-    const blockIndex = Math.floor(gardeDaysBetween(gvAnchorStart, date) / GARDE_GRANDES_VACANCES.blockLengthDays);
-    const parent = (blockIndex % 2 === 0) ? GARDE_GRANDES_VACANCES.firstBlockParent : gardeOpposite(GARDE_GRANDES_VACANCES.firstBlockParent);
-    const label = (dow === 5 || dow === 6 || dow === 0)
-      ? `Grandes vacances — semaine ${blockIndex + 1} (week-end)`
-      : `Grandes vacances — semaine ${blockIndex + 1}`;
-    return { parent, period: "Grandes vacances", label };
+
+    // Hors bloc (avant le 1er, entre deux blocs, après le dernier) : le
+    // week-end suit l'alternance normale, la semaine reste au domicile
+    // habituel de chaque enfant.
+    if (isWeekend) {
+      return { parent: gardeNormalWeekendParent(date), period: "Grandes vacances", label: "Grandes vacances (week-end)" };
+    }
+    return { parent: null, period: "Grandes vacances", label: "Grandes vacances" };
   }
 
   for (const v of GARDE_PETITES_VACANCES) {
