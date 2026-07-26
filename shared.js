@@ -648,6 +648,20 @@ async function postDeleteGardeBlock(blockId) {
   }
 }
 
+// action: "update_garde_block" — modifie un bloc de vacances existant
+// (nom, dates, parent) directement depuis l'appli.
+async function postUpdateGardeBlock(blockId, label, start, end, parent) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update_garde_block", blockId, label, start, end, parent })
+    });
+  } catch (e) {
+    console.warn("Impossible de modifier le bloc de vacances dans Notion :", e);
+  }
+}
+
 // Rendu du calendrier de garde (3 mois, décalables via monthOffset) dans
 // container, pour l'enfant childName. Partagé entre adults.html (avec
 // clic admin) et kids.html (lecture seule, onCellClick = null).

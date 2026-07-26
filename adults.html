@@ -481,10 +481,72 @@
 
       blocks.forEach(block => {
         const li = document.createElement("li");
+        li.style.flexWrap = "wrap";
 
-        const label = document.createElement("span");
-        const parentText = block.parent === "maman" ? "Maman" : "Papa";
-        label.textContent = `${block.label || "Vacances"} — ${parentText} (${block.start} → ${block.end})`;
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.alignItems = "center";
+        left.style.gap = "0.3rem";
+        left.style.flex = "2";
+        left.style.flexWrap = "wrap";
+        left.style.minWidth = "260px";
+
+        const labelInput = document.createElement("input");
+        labelInput.type = "text";
+        labelInput.value = block.label || "";
+        labelInput.style.flex = "2";
+        labelInput.style.minWidth = "140px";
+        labelInput.style.padding = "0.25rem";
+
+        const startInput = document.createElement("input");
+        startInput.type = "date";
+        startInput.value = block.start;
+        startInput.style.padding = "0.25rem";
+
+        const endInput = document.createElement("input");
+        endInput.type = "date";
+        endInput.value = block.end;
+        endInput.style.padding = "0.25rem";
+
+        const parentSelect = document.createElement("select");
+        parentSelect.style.padding = "0.25rem";
+        ["maman", "papa"].forEach(p => {
+          const option = document.createElement("option");
+          option.value = p;
+          option.textContent = p === "maman" ? "Maman" : "Papa";
+          if (p === block.parent) option.selected = true;
+          parentSelect.appendChild(option);
+        });
+
+        async function submitBlockChange() {
+          const label = labelInput.value.trim();
+          const start = startInput.value;
+          const end = endInput.value;
+          const parent = parentSelect.value;
+          if (!label || !start || !end) return;
+          if (start > end) {
+            alert("La date de début doit être avant la date de fin.");
+            startInput.value = block.start;
+            endInput.value = block.end;
+            return;
+          }
+          block.label = label;
+          block.start = start;
+          block.end = end;
+          block.parent = parent;
+          await postUpdateGardeBlock(block.id, label, start, end, parent);
+          renderGardeCalendar();
+        }
+
+        labelInput.addEventListener("change", submitBlockChange);
+        startInput.addEventListener("change", submitBlockChange);
+        endInput.addEventListener("change", submitBlockChange);
+        parentSelect.addEventListener("change", submitBlockChange);
+
+        left.appendChild(labelInput);
+        left.appendChild(startInput);
+        left.appendChild(endInput);
+        left.appendChild(parentSelect);
 
         const delBtn = document.createElement("button");
         delBtn.className = "btn-danger";
@@ -497,7 +559,7 @@
           renderGardeCalendar();
         });
 
-        li.appendChild(label);
+        li.appendChild(left);
         li.appendChild(delBtn);
         list.appendChild(li);
       });
