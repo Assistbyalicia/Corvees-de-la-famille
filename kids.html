@@ -77,6 +77,7 @@
       <span id="quetes-tab-badge" class="tab-badge" style="display:none;"></span>
     </button>
     <button class="tab-btn" data-tab="recap">Récap</button>
+    <button class="tab-btn" data-tab="planning">🏰 Chez qui ?</button>
     <button class="tab-btn" data-tab="compte">Mon compte</button>
   </div>
 
@@ -145,6 +146,18 @@
       <h2>🏆 Classement de la semaine</h2>
       <p class="small">Total des étoiles gagnées ces 7 derniers jours.</p>
       <div id="recap-table"></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-planning">
+    <div class="section">
+      <h2>🏰 Chez qui ?</h2>
+      <p class="small">Basé sur le calendrier scolaire (alternance des week-ends, vacances).</p>
+      <div class="garde-legend">
+        <span><i class="dot" style="background:#F76E9C;"></i>Chez Maman</span>
+        <span><i class="dot" style="background:#4A90E2;"></i>Chez Papa</span>
+      </div>
+      <div id="garde-months-kids"></div>
     </div>
   </div>
 
@@ -374,6 +387,83 @@
       section.style.display = "block";
     }
 
+    // Vue calendrier en lecture seule pour l'enfant actif (pas de clic : les
+    // exceptions ne se posent que côté adultes).
+    function renderGardeCalendarKids() {
+      const container = document.getElementById("garde-months-kids");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const child = (data.children || []).find(c => c.id === data.activeChildId);
+      if (!child) {
+        container.innerHTML = "<p class=\"small\">Choisis d'abord ton prénom dans l'onglet Mes quêtes.</p>";
+        return;
+      }
+
+      const overrides = data.gardeOverrides || {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dowFmt = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
+      const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+      const firstMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      for (let m = 0; m < 3; m++) {
+        const monthDate = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + m, 1);
+        const year = monthDate.getFullYear(), month = monthDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+
+        const box = document.createElement("div");
+        box.className = "garde-month";
+
+        const title = document.createElement("h3");
+        title.textContent = monthFmt.format(monthDate);
+        box.appendChild(title);
+
+        const grid = document.createElement("div");
+        grid.className = "garde-grid";
+
+        dowFmt.forEach(dw => {
+          const cell = document.createElement("div");
+          cell.className = "garde-dow";
+          cell.textContent = dw;
+          grid.appendChild(cell);
+        });
+
+        for (let i = 0; i < firstDow; i++) {
+          grid.appendChild(document.createElement("div"));
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateObj = new Date(year, month, day);
+          const loc = getChildGardeLocation(child.name, dateObj, overrides);
+          const isToday = gardeSameDay(dateObj, today);
+
+          const cell = document.createElement("div");
+          cell.title = loc.label;
+          cell.className = "garde-cell " + (loc.parent || "none");
+          if (isToday) cell.classList.add("today");
+          if (loc.overridden) cell.classList.add("overridden");
+
+          const num = document.createElement("span");
+          num.textContent = day;
+          cell.appendChild(num);
+
+          if (loc.parent) {
+            const who = document.createElement("span");
+            who.className = "who";
+            who.textContent = GARDE_PARENT_DISPLAY[loc.parent].emoji;
+            cell.appendChild(who);
+          }
+
+          grid.appendChild(cell);
+        }
+
+        box.appendChild(grid);
+        container.appendChild(box);
+      }
+    }
+
     function renderChores() {
       const list = document.getElementById("chores-list");
       list.innerHTML = "";
@@ -587,6 +677,7 @@
       renderStreak();
       renderLevel();
       renderGardeToday();
+      renderGardeCalendarKids();
       renderChores();
       renderRewards();
       renderProposedRewards();
