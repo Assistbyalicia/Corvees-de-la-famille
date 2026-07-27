@@ -15,8 +15,41 @@
       justify-content: center;
     }
     .container {
-      max-width: 800px;
+      max-width: 900px;
       width: 100%;
+    }
+    .layout-with-sidebar {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .layout-with-sidebar .tabs {
+      flex-direction: column;
+      align-items: stretch;
+      flex-shrink: 0;
+      width: 180px;
+      position: sticky;
+      top: 1rem;
+      gap: 0.2rem;
+    }
+    .layout-with-sidebar .tab-btn {
+      text-align: left;
+      justify-content: flex-start;
+    }
+    .layout-with-sidebar .tab-content {
+      flex: 1;
+      min-width: 0;
+    }
+    @media (max-width: 700px) {
+      .layout-with-sidebar {
+        flex-direction: column;
+      }
+      .layout-with-sidebar .tabs {
+        flex-direction: row;
+        width: 100%;
+        overflow-x: auto;
+        position: static;
+      }
     }
     .people-picker {
       display: flex;
@@ -77,6 +110,7 @@
       </p>
     </div>
 
+    <div class="layout-with-sidebar">
     <div class="tabs" id="tabs">
       <button class="tab-btn" data-tab="enfants">Enfants</button>
       <button class="tab-btn" data-tab="adultes">Adultes</button>
@@ -91,6 +125,7 @@
       <button class="tab-btn" data-tab="compte">Mon compte</button>
     </div>
 
+    <div class="tab-content">
     <div class="tab-panel" id="tab-enfants">
       <div class="section">
         <h2>Enfants – tableau de bord</h2>
@@ -300,6 +335,8 @@
           <button id="security-question-btn" class="btn-primary">Enregistrer</button>
         </div>
       </div>
+    </div>
+    </div>
     </div>
   </div>
 
