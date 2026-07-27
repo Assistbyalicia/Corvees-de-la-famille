@@ -33,22 +33,58 @@
       gap: 0.2rem;
     }
     .layout-with-sidebar .tab-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       text-align: left;
-      justify-content: flex-start;
+      gap: 0.5rem;
+    }
+    /* En sidebar, le bouton prend toute la largeur : la pastille doit
+       rester collée au texte plutôt qu'ancrée au coin du bouton. */
+    .layout-with-sidebar .tab-btn .tab-badge {
+      position: static;
     }
     .layout-with-sidebar .tab-content {
       flex: 1;
       min-width: 0;
     }
+
+    /* Sur mobile, le menu latéral devient un menu déroulant : un bouton
+       affichant l'onglet actif, qui déplie la liste des onglets au clic. */
+    .tabs-toggle {
+      display: none;
+    }
     @media (max-width: 700px) {
       .layout-with-sidebar {
         flex-direction: column;
       }
-      .layout-with-sidebar .tabs {
-        flex-direction: row;
+      .tabs-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         width: 100%;
-        overflow-x: auto;
+        padding: 0.6rem 1rem;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--color-border);
+        background: #ffffff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .tabs-toggle-arrow {
+        transition: transform 0.15s ease;
+        color: var(--color-text-muted);
+      }
+      .layout-with-sidebar.tabs-expanded .tabs-toggle-arrow {
+        transform: rotate(180deg);
+      }
+      .layout-with-sidebar .tabs {
+        display: none;
+        width: 100%;
         position: static;
+        margin-top: 0.4rem;
+      }
+      .layout-with-sidebar.tabs-expanded .tabs {
+        display: flex;
       }
     }
     .people-picker {
@@ -110,19 +146,23 @@
       </p>
     </div>
 
-    <div class="layout-with-sidebar">
+    <div class="layout-with-sidebar" id="sidebar-layout">
+    <button class="tabs-toggle" id="tabs-toggle" type="button">
+      <span id="tabs-toggle-label">Enfants</span>
+      <span class="tabs-toggle-arrow">▾</span>
+    </button>
     <div class="tabs" id="tabs">
-      <button class="tab-btn" data-tab="enfants">Enfants</button>
-      <button class="tab-btn" data-tab="adultes">Adultes</button>
-      <button class="tab-btn" data-tab="corvees">Corvées</button>
-      <button class="tab-btn" data-tab="recompenses">
+      <button class="tab-btn" data-tab="enfants" data-label="Enfants">Enfants</button>
+      <button class="tab-btn" data-tab="adultes" data-label="Adultes">Adultes</button>
+      <button class="tab-btn" data-tab="corvees" data-label="Corvées">Corvées</button>
+      <button class="tab-btn" data-tab="recompenses" data-label="Récompenses">
         Récompenses
         <span id="recompenses-tab-badge" class="tab-badge" style="display:none;"></span>
       </button>
-      <button class="tab-btn" data-tab="codes">Codes</button>
-      <button class="tab-btn" data-tab="recap">Récap</button>
-      <button class="tab-btn" data-tab="garde">🏰 Planning garde</button>
-      <button class="tab-btn" data-tab="compte">Mon compte</button>
+      <button class="tab-btn" data-tab="codes" data-label="Codes">Codes</button>
+      <button class="tab-btn" data-tab="recap" data-label="Récap">Récap</button>
+      <button class="tab-btn" data-tab="garde" data-label="🏰 Planning garde">🏰 Planning garde</button>
+      <button class="tab-btn" data-tab="compte" data-label="Mon compte">Mon compte</button>
     </div>
 
     <div class="tab-content">
@@ -446,6 +486,31 @@
         span.textContent = "Aucun enfant configuré.";
         container.appendChild(span);
       }
+    }
+
+    // Sur mobile, le menu latéral se replie en menu déroulant : un bouton
+    // affiche l'onglet actif, le clic déplie/replie la liste, et choisir un
+    // onglet referme le menu automatiquement.
+    function setupMobileTabsToggle() {
+      const layout = document.getElementById("sidebar-layout");
+      const toggle = document.getElementById("tabs-toggle");
+      const toggleLabel = document.getElementById("tabs-toggle-label");
+      const buttons = Array.from(document.querySelectorAll(".tab-btn"));
+      if (!layout || !toggle || !toggleLabel) return;
+
+      const activeBtn = buttons.find(btn => btn.classList.contains("active"));
+      if (activeBtn) toggleLabel.textContent = activeBtn.dataset.label || activeBtn.textContent.trim();
+
+      toggle.addEventListener("click", () => {
+        layout.classList.toggle("tabs-expanded");
+      });
+
+      buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          toggleLabel.textContent = btn.dataset.label || btn.textContent.trim();
+          layout.classList.remove("tabs-expanded");
+        });
+      });
     }
 
     // Planning de garde : un calendrier par enfant (leur domicile habituel
@@ -1677,6 +1742,8 @@
         setupRestrictedView();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
       }
+
+      setupMobileTabsToggle();
 
       renderGardeChildPicker();
       setupGardeNav();
