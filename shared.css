@@ -54,6 +54,36 @@ h1 {
   border: 1px solid var(--color-border);
 }
 
+/* Sections secondaires (historiques, formulaires d'ajout...) repliées par
+   défaut, pour garder l'essentiel visible sans avoir à scroller. */
+details.section > summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+details.section > summary::-webkit-details-marker {
+  display: none;
+}
+details.section > summary::after {
+  content: "▾";
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+details.section[open] > summary::after {
+  transform: rotate(180deg);
+}
+details.section > summary + * {
+  margin-top: 0.6rem;
+}
+
 .small {
   font-size: 0.8rem;
   color: var(--color-text-muted);
