@@ -198,6 +198,24 @@
         </p>
         <ul class="list" id="codes-list"></ul>
       </div>
+
+      <details class="section" id="manage-people-admin" style="display:none;">
+        <summary>Gérer les personnes</summary>
+        <p class="small">
+          Désactiver une personne la retire de l'appli sans supprimer son historique (corvées,
+          achats). Tu peux la réactiver à tout moment.
+        </p>
+        <ul class="list" id="people-roster-list"></ul>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem; align-items:center;">
+          <input id="new-person-name" type="text" placeholder="Prénom" style="flex:2; padding:0.25rem;" />
+          <select id="new-person-type" style="padding:0.25rem;">
+            <option value="Enfant">Enfant</option>
+            <option value="Adulte">Adulte</option>
+          </select>
+          <input id="new-person-code" type="text" inputmode="numeric" placeholder="Code (ex. 1234)" style="padding:0.25rem;" />
+        </div>
+        <button id="add-person-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
+      </details>
     </div>
 
     <div class="tab-panel" id="tab-recap">
@@ -1385,6 +1403,75 @@
       }
     }
 
+    // Gestion des personnes (admin uniquement) : ajout, activation/désactivation.
+    // On ne supprime jamais une page Notion ici, pour ne pas casser les
+    // historiques (Journal) qui la référencent encore.
+    function renderManagePeopleAdmin() {
+      const section = document.getElementById("manage-people-admin");
+      const list = document.getElementById("people-roster-list");
+      if (!section || !list) return;
+
+      if (!session.isAdmin) {
+        section.style.display = "none";
+        return;
+      }
+      section.style.display = "block";
+      list.innerHTML = "";
+
+      const roster = data.personRoster || [];
+      if (roster.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune personne configurée.";
+        list.appendChild(li);
+      }
+
+      roster.forEach(person => {
+        const li = document.createElement("li");
+        if (!person.active) li.style.opacity = "0.55";
+
+        const label = document.createElement("span");
+        label.textContent = `${person.name} (${person.type})${person.active ? "" : " — désactivé(e)"}`;
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = person.active ? "btn-danger" : "btn-secondary";
+        toggleBtn.textContent = person.active ? "Désactiver" : "Réactiver";
+        toggleBtn.addEventListener("click", async () => {
+          if (person.active && !confirm(`Désactiver ${person.name} ? Son historique sera conservé.`)) return;
+          await postTogglePersonActive(person.id, !person.active);
+          data = await loadAppData();
+          renderManagePeopleAdmin();
+          renderCodesList();
+        });
+
+        li.appendChild(label);
+        li.appendChild(toggleBtn);
+        list.appendChild(li);
+      });
+    }
+
+    function setupAddPersonForm() {
+      const btn = document.getElementById("add-person-btn");
+      const nameInput = document.getElementById("new-person-name");
+      const typeSelect = document.getElementById("new-person-type");
+      const codeInput = document.getElementById("new-person-code");
+      if (!btn || !nameInput || !typeSelect || !codeInput) return;
+
+      btn.addEventListener("click", async () => {
+        const name = nameInput.value.trim();
+        const type = typeSelect.value;
+        const code = codeInput.value.trim();
+        if (!name || !code) return;
+
+        await postAddPerson(name, type, code);
+        data = await loadAppData();
+        renderManagePeopleAdmin();
+        renderCodesList();
+
+        nameInput.value = "";
+        codeInput.value = "";
+      });
+    }
+
     // Construit un <select> de fréquence (Quotidien/Hebdomadaire/Ponctuel) et,
     // si présent, le groupe de cases à cocher des jours associé (affiché
     // seulement quand la fréquence choisie est "hebdomadaire"). onChange
@@ -1559,6 +1646,8 @@
       renderGardeCalendar();
       renderGardeBlocksAdmin();
       setupAddBlockForm();
+      renderManagePeopleAdmin();
+      setupAddPersonForm();
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);

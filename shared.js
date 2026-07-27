@@ -85,6 +85,7 @@ const defaultData = {
   choreHistory: [],
   gardeOverrides: {},
   gardeBlocks: [],
+  personRoster: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -170,6 +171,7 @@ async function loadAppData() {
       choreHistory: config.choreHistory || [],
       gardeOverrides: config.gardeOverrides || {},
       gardeBlocks: config.gardeBlocks || [],
+      personRoster: config.personRoster || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -659,6 +661,35 @@ async function postUpdateGardeBlock(blockId, label, start, end, parent) {
     });
   } catch (e) {
     console.warn("Impossible de modifier le bloc de vacances dans Notion :", e);
+  }
+}
+
+// action: "add_person" — crée un enfant ou un adulte dans Notion, pour
+// gérer la famille depuis l'appli sans passer par Notion directement.
+async function postAddPerson(name, type, code) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add_person", name, type, code })
+    });
+  } catch (e) {
+    console.warn("Impossible d'ajouter la personne dans Notion :", e);
+  }
+}
+
+// action: "toggle_person_active" — active/désactive une personne (jamais
+// de suppression pure, pour ne pas casser les historiques qui la
+// référencent encore).
+async function postTogglePersonActive(personId, active) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "toggle_person_active", personId, active })
+    });
+  } catch (e) {
+    console.warn("Impossible de changer le statut de la personne dans Notion :", e);
   }
 }
 
