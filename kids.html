@@ -78,6 +78,7 @@
     </button>
     <button class="tab-btn" data-tab="recap">Récap</button>
     <button class="tab-btn" data-tab="planning">🏰 Chez qui ?</button>
+    <button class="tab-btn" data-tab="repas">🍽️ On mange quoi ?</button>
     <button class="tab-btn" data-tab="compte">Mon compte</button>
   </div>
 
@@ -165,6 +166,19 @@
         <button id="garde-next-btn-kids" class="btn-secondary">▶</button>
       </div>
       <div id="garde-months-kids"></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-repas">
+    <div class="section">
+      <h2>🍽️ On mange quoi ?</h2>
+      <p class="small">Le menu de la semaine, décidé par les adultes.</p>
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+        <button id="repas-prev-btn-kids" class="btn-secondary">◀</button>
+        <button id="repas-today-btn-kids" class="btn-secondary">Cette semaine</button>
+        <button id="repas-next-btn-kids" class="btn-secondary">▶</button>
+      </div>
+      <div id="repas-grid-kids"></div>
     </div>
   </div>
 
@@ -425,6 +439,26 @@
       todayBtn.addEventListener("click", () => { gardeMonthOffsetKids = 0; renderGardeCalendarKids(); });
     }
 
+    // Menu de la semaine en lecture seule (les enfants voient, seuls les
+    // adultes modifient depuis adults.html).
+    let repasWeekOffsetKids = 0;
+
+    function renderRepasKids() {
+      const container = document.getElementById("repas-grid-kids");
+      if (!container) return;
+      renderMealPlanWeek(container, data.recipes || [], data.mealPlan || [], repasWeekOffsetKids, null);
+    }
+
+    function setupRepasNavKids() {
+      const prevBtn = document.getElementById("repas-prev-btn-kids");
+      const todayBtn = document.getElementById("repas-today-btn-kids");
+      const nextBtn = document.getElementById("repas-next-btn-kids");
+      if (!prevBtn || !todayBtn || !nextBtn) return;
+      prevBtn.addEventListener("click", () => { repasWeekOffsetKids -= 1; renderRepasKids(); });
+      todayBtn.addEventListener("click", () => { repasWeekOffsetKids = 0; renderRepasKids(); });
+      nextBtn.addEventListener("click", () => { repasWeekOffsetKids += 1; renderRepasKids(); });
+    }
+
     function renderChores() {
       const list = document.getElementById("chores-list");
       list.innerHTML = "";
@@ -641,6 +675,7 @@
       renderLevel();
       renderGardeToday();
       renderGardeCalendarKids();
+      renderRepasKids();
       renderChores();
       renderRewards();
       renderProposedRewards();
@@ -671,6 +706,7 @@
 
       renderOfflineBadge(data);
       setupGardeNavKids();
+      setupRepasNavKids();
       renderAll();
       renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);
       setupTabs("quetes");

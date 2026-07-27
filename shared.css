@@ -379,6 +379,100 @@ tfoot td {
   transform: translateY(-2px);
 }
 
+.meal-grid {
+  display: grid;
+  grid-template-columns: 90px repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  overflow-x: auto;
+}
+.meal-day-header {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+  padding-bottom: 4px;
+}
+.meal-day-header.today {
+  color: var(--color-primary);
+}
+.meal-slot-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.meal-cell {
+  background: #FAF9FF;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.4rem;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: transform 0.12s ease;
+}
+.meal-cell.today {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+.meal-cell.filled {
+  background: var(--gradient-quest);
+  color: #fff;
+  border-color: transparent;
+}
+.meal-cell-placeholder {
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+.meal-cell.clickable {
+  cursor: pointer;
+}
+.meal-cell.clickable:hover {
+  transform: translateY(-2px);
+}
+
+.shopping-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.shopping-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.2rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+}
+.shopping-list li:last-child {
+  border-bottom: none;
+}
+.shopping-list li.checked span.ing-name {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+.shopping-list .ing-name {
+  flex: 1;
+}
+.shopping-list .ing-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.shopping-list .ing-stock {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: #E8F8EE;
+  color: #16794A;
+  font-weight: 700;
+}
+
 /* Étoile qui "pop" brièvement quand une corvée est validée. */
 @keyframes star-pop-float {
   0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
@@ -446,7 +540,8 @@ tfoot td {
   select,
   th,
   tfoot td,
-  .garde-cell.none {
+  .garde-cell.none,
+  .meal-cell {
     background: #29243a;
   }
   button {

@@ -86,6 +86,8 @@ const defaultData = {
   gardeOverrides: {},
   gardeBlocks: [],
   personRoster: [],
+  recipes: [],
+  mealPlan: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -172,6 +174,8 @@ async function loadAppData() {
       gardeOverrides: config.gardeOverrides || {},
       gardeBlocks: config.gardeBlocks || [],
       personRoster: config.personRoster || [],
+      recipes: config.recipes || [],
+      mealPlan: config.mealPlan || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -693,6 +697,34 @@ async function postTogglePersonActive(personId, active) {
   }
 }
 
+// action: "set_meal_plan" — assigne (ou remplace) la recette prévue pour un
+// jour + créneau (midi/soir) donné. La recette elle-même reste gérée dans
+// Notion (BDD RECETTES) : ici on choisit juste laquelle est prévue quand.
+async function postSetMealPlan(dateKey, slot, recipeId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_meal_plan", date: dateKey, slot, recipeId })
+    });
+  } catch (e) {
+    console.warn("Impossible d'enregistrer le menu dans Notion :", e);
+  }
+}
+
+// action: "clear_meal_plan" — retire la recette prévue pour un jour + créneau.
+async function postClearMealPlan(dateKey, slot) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear_meal_plan", date: dateKey, slot })
+    });
+  } catch (e) {
+    console.warn("Impossible de retirer le menu dans Notion :", e);
+  }
+}
+
 // Rendu du calendrier de garde (3 mois, décalables via monthOffset) dans
 // container, pour l'enfant childName. Partagé entre adults.html (avec
 // clic admin) et kids.html (lecture seule, onCellClick = null).
@@ -767,6 +799,116 @@ function renderGardeMonths(container, childName, overrides, blocks, monthOffset,
     box.appendChild(grid);
     container.appendChild(box);
   }
+}
+
+const MEAL_SLOTS = [
+  { value: "Midi", label: "🍛 Midi" },
+  { value: "Soir", label: "🥘 Soir" }
+];
+
+// Les 7 dates (lundi à dimanche) de la semaine décalée de weekOffset semaines
+// par rapport à la semaine en cours (0 = semaine actuelle).
+function getWeekDates(weekOffset) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dow = (today.getDay() + 6) % 7; // 0 = lundi
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dow + (weekOffset || 0) * 7);
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function findMealPlanEntry(mealPlan, dateKey, slot) {
+  return (mealPlan || []).find(m => m.date === dateKey && m.slot === slot);
+}
+
+function findRecipeById(recipes, recipeId) {
+  return (recipes || []).find(r => r.id === recipeId);
+}
+
+// Rend une grille "jour x créneau" pour une semaine de menus. onCellClick
+// (dateKey, slot, currentRecipeId, dateObj) est optionnel : le passer rend
+// les cases cliquables (vue adulte éditable) ; l'omettre donne une vue
+// lecture seule (vue enfant).
+function renderMealPlanWeek(container, recipes, mealPlan, weekOffset, onCellClick) {
+  container.innerHTML = "";
+
+  const dates = getWeekDates(weekOffset || 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dowFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short" });
+  const dayFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+  const grid = document.createElement("div");
+  grid.className = "meal-grid";
+
+  grid.appendChild(document.createElement("div"));
+  dates.forEach(d => {
+    const header = document.createElement("div");
+    header.className = "meal-day-header" + (gardeSameDay(d, today) ? " today" : "");
+    header.textContent = `${dowFmt.format(d)} ${dayFmt.format(d)}`;
+    grid.appendChild(header);
+  });
+
+  MEAL_SLOTS.forEach(slotDef => {
+    const label = document.createElement("div");
+    label.className = "meal-slot-label";
+    label.textContent = slotDef.label;
+    grid.appendChild(label);
+
+    dates.forEach(d => {
+      const dateKey = gardeDateKey(d);
+      const entry = findMealPlanEntry(mealPlan, dateKey, slotDef.value);
+      const recipe = entry ? findRecipeById(recipes, entry.recipeId) : null;
+
+      const cell = document.createElement("div");
+      cell.className = "meal-cell" + (recipe ? " filled" : "") + (gardeSameDay(d, today) ? " today" : "");
+
+      const text = document.createElement("span");
+      text.textContent = recipe ? recipe.name : (onCellClick ? "+ Ajouter" : "—");
+      if (!recipe) text.className = "meal-cell-placeholder";
+      cell.appendChild(text);
+
+      if (onCellClick) {
+        cell.classList.add("clickable");
+        cell.addEventListener("click", () => onCellClick(dateKey, slotDef.value, entry ? entry.recipeId : null, d));
+      }
+
+      grid.appendChild(cell);
+    });
+  });
+
+  container.appendChild(grid);
+}
+
+// Construit la liste de courses à partir des menus programmés sur les
+// dateKeys données (typiquement la semaine affichée) : union dédupliquée des
+// ingrédients de chaque recette prévue, avec les recettes qui les utilisent.
+function computeShoppingList(recipes, mealPlan, dateKeys) {
+  const keySet = new Set(dateKeys);
+  const byIngredient = {};
+
+  (mealPlan || [])
+    .filter(entry => keySet.has(entry.date))
+    .forEach(entry => {
+      const recipe = findRecipeById(recipes, entry.recipeId);
+      if (!recipe) return;
+      (recipe.ingredients || []).forEach(ing => {
+        if (!byIngredient[ing.id]) {
+          byIngredient[ing.id] = { ...ing, recipes: [] };
+        }
+        if (!byIngredient[ing.id].recipes.includes(recipe.name)) {
+          byIngredient[ing.id].recipes.push(recipe.name);
+        }
+      });
+    });
+
+  return Object.values(byIngredient).sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
 // Petite étoile qui "pop" et s'envole au-dessus de anchorEl (le bouton
