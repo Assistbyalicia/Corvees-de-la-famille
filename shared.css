@@ -268,7 +268,7 @@ tfoot td {
   min-width: 16px;
   height: 16px;
   padding: 0 3px;
-  border-radius: var(--radius-pill);
+  border-radius: 0;
   background: #E11D48;
   color: #fff;
   font-size: 0.65rem;
