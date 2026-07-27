@@ -461,6 +461,36 @@
     // pas que regarder le détail d'un enfant ici change l'enfant actif ailleurs).
     let activeChildDetailId = null;
 
+    // Par défaut, chaque corvée/récompense s'affiche en résumé compact
+    // (nom, coût, pour qui) plutôt qu'avec tous les contrôles d'édition
+    // visibles en permanence — trop de champs à la fois rendait la liste
+    // difficile à lire. Un clic sur "Modifier" bascule cette carte-ci en
+    // mode édition complet (jusqu'au prochain "Réduire").
+    const expandedChoreIds = new Set();
+    const expandedRewardIds = new Set();
+
+    function summarizeAssignedTo(assignedTo, allPeople) {
+      if (!assignedTo || assignedTo.length === 0) return "Tout le monde";
+      const names = assignedTo
+        .map(id => allPeople.find(p => p.id === id))
+        .filter(Boolean)
+        .map(p => p.name);
+      return names.length ? names.join(", ") : "Tout le monde";
+    }
+
+    function summarizeChoreFrequency(chore) {
+      const frequency = chore.frequency || "quotidien";
+      if (frequency !== "hebdomadaire") {
+        return CHORE_FREQUENCIES.find(f => f.value === frequency)?.label || "Quotidien";
+      }
+      const days = chore.weeklyDays || [];
+      if (days.length === 0) return "Hebdomadaire";
+      const dayLabels = days
+        .map(d => CHORE_WEEKDAYS.find(w => w.value === d)?.label.slice(0, 3))
+        .filter(Boolean);
+      return `Hebdomadaire (${dayLabels.join(", ")})`;
+    }
+
     function renderChildrenDetailPicker() {
       const container = document.getElementById("children-detail-picker");
       if (!container) return;
@@ -1053,19 +1083,69 @@
 
       (data.chores || []).forEach(chore => {
         const li = document.createElement("li");
-        li.style.flexWrap = "wrap";
+        li.style.flexDirection = "column";
+        li.style.alignItems = "stretch";
+        li.style.gap = "0.5rem";
+
+        if (!expandedChoreIds.has(chore.id)) {
+          const row = document.createElement("div");
+          row.style.display = "flex";
+          row.style.alignItems = "center";
+          row.style.justifyContent = "space-between";
+          row.style.gap = "0.75rem";
+
+          const summary = document.createElement("div");
+          summary.style.display = "flex";
+          summary.style.flexDirection = "column";
+          summary.style.gap = "0.15rem";
+          summary.style.minWidth = "0";
+
+          const titleLine = document.createElement("div");
+          titleLine.style.display = "flex";
+          titleLine.style.alignItems = "center";
+          titleLine.style.gap = "0.4rem";
+          const strong = document.createElement("strong");
+          strong.textContent = chore.label;
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = `${chore.stars}⭐`;
+          titleLine.appendChild(strong);
+          titleLine.appendChild(badge);
+
+          const metaLine = document.createElement("span");
+          metaLine.className = "small";
+          metaLine.textContent = `${summarizeChoreFrequency(chore)} · ${summarizeAssignedTo(chore.assignedTo, allPeople)}`;
+
+          summary.appendChild(titleLine);
+          summary.appendChild(metaLine);
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "btn-secondary";
+          editBtn.textContent = "Modifier";
+          editBtn.style.flexShrink = "0";
+          editBtn.addEventListener("click", () => {
+            expandedChoreIds.add(chore.id);
+            renderChoresList();
+          });
+
+          row.appendChild(summary);
+          row.appendChild(editBtn);
+          li.appendChild(row);
+          list.appendChild(li);
+          return;
+        }
 
         const left = document.createElement("div");
         left.style.display = "flex";
         left.style.alignItems = "center";
         left.style.gap = "0.3rem";
-        left.style.flex = "2";
-        left.style.minWidth = "160px";
+        left.style.flexWrap = "wrap";
 
         const labelInput = document.createElement("input");
         labelInput.type = "text";
         labelInput.value = chore.label;
         labelInput.style.flex = "2";
+        labelInput.style.minWidth = "140px";
         labelInput.style.padding = "0.25rem";
 
         const starsInput = document.createElement("input");
@@ -1099,6 +1179,16 @@
         const starsSuffix = document.createElement("span");
         starsSuffix.textContent = "⭐";
         left.appendChild(starsSuffix);
+
+        const reduceBtn = document.createElement("button");
+        reduceBtn.className = "btn-secondary";
+        reduceBtn.textContent = "Réduire";
+        reduceBtn.style.marginLeft = "auto";
+        reduceBtn.addEventListener("click", () => {
+          expandedChoreIds.delete(chore.id);
+          renderChoresList();
+        });
+        left.appendChild(reduceBtn);
 
         const right = document.createElement("div");
         right.style.display = "flex";
@@ -1156,6 +1246,7 @@
           const index = (data.chores || []).indexOf(chore);
           if (index !== -1) {
             data.chores.splice(index, 1);
+            expandedChoreIds.delete(chore.id);
             saveData(data);
             renderChoresList();
             renderChildrenTable();
@@ -1191,19 +1282,69 @@
 
       activeRewards.forEach(reward => {
         const li = document.createElement("li");
-        li.style.flexWrap = "wrap";
+        li.style.flexDirection = "column";
+        li.style.alignItems = "stretch";
+        li.style.gap = "0.5rem";
+
+        if (!expandedRewardIds.has(reward.id)) {
+          const row = document.createElement("div");
+          row.style.display = "flex";
+          row.style.alignItems = "center";
+          row.style.justifyContent = "space-between";
+          row.style.gap = "0.75rem";
+
+          const summary = document.createElement("div");
+          summary.style.display = "flex";
+          summary.style.flexDirection = "column";
+          summary.style.gap = "0.15rem";
+          summary.style.minWidth = "0";
+
+          const titleLine = document.createElement("div");
+          titleLine.style.display = "flex";
+          titleLine.style.alignItems = "center";
+          titleLine.style.gap = "0.4rem";
+          const strong = document.createElement("strong");
+          strong.textContent = reward.label;
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = `${reward.cost}⭐`;
+          titleLine.appendChild(strong);
+          titleLine.appendChild(badge);
+
+          const metaLine = document.createElement("span");
+          metaLine.className = "small";
+          metaLine.textContent = summarizeAssignedTo(reward.assignedTo, allPeople);
+
+          summary.appendChild(titleLine);
+          summary.appendChild(metaLine);
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "btn-secondary";
+          editBtn.textContent = "Modifier";
+          editBtn.style.flexShrink = "0";
+          editBtn.addEventListener("click", () => {
+            expandedRewardIds.add(reward.id);
+            renderRewardsList();
+          });
+
+          row.appendChild(summary);
+          row.appendChild(editBtn);
+          li.appendChild(row);
+          list.appendChild(li);
+          return;
+        }
 
         const left = document.createElement("div");
         left.style.display = "flex";
         left.style.alignItems = "center";
         left.style.gap = "0.3rem";
-        left.style.flex = "2";
-        left.style.minWidth = "160px";
+        left.style.flexWrap = "wrap";
 
         const labelInput = document.createElement("input");
         labelInput.type = "text";
         labelInput.value = reward.label;
         labelInput.style.flex = "2";
+        labelInput.style.minWidth = "140px";
         labelInput.style.padding = "0.25rem";
 
         const costInput = document.createElement("input");
@@ -1237,6 +1378,16 @@
         costSuffix.textContent = "⭐";
         left.appendChild(costSuffix);
 
+        const reduceBtn = document.createElement("button");
+        reduceBtn.className = "btn-secondary";
+        reduceBtn.textContent = "Réduire";
+        reduceBtn.style.marginLeft = "auto";
+        reduceBtn.addEventListener("click", () => {
+          expandedRewardIds.delete(reward.id);
+          renderRewardsList();
+        });
+        left.appendChild(reduceBtn);
+
         const right = document.createElement("div");
         right.style.display = "flex";
         right.style.alignItems = "center";
@@ -1268,6 +1419,7 @@
           const index = (data.rewards || []).indexOf(reward);
           if (index !== -1) {
             data.rewards.splice(index, 1);
+            expandedRewardIds.delete(reward.id);
             saveData(data);
             renderRewardsList();
             renderAdultsSections();
