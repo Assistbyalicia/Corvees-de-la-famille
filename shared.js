@@ -952,14 +952,26 @@ function renderMealPlanMonth(container, recipes, mealPlan, monthOffset, onCellCl
   container.appendChild(list);
 }
 
+// Valeurs uniques du champ "Type de repas" présentes dans les recettes,
+// triées alphabétiquement, pour peupler le sélecteur de filtre.
+function getUniqueMealTypes(recipes) {
+  const set = new Set();
+  (recipes || []).forEach(r => (r.mealTypes || []).forEach(t => set.add(t)));
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "fr"));
+}
+
 // Rend la liste consultable des recettes (fiche par recette : tags, temps,
 // note, lien vers la recette source, ingrédients). filterText optionnel pour
-// filtrer par nom.
-function renderRecipesList(container, recipes, filterText) {
+// filtrer par nom, mealTypeFilter optionnel pour filtrer par "Type de repas".
+function renderRecipesList(container, recipes, filterText, mealTypeFilter) {
   container.innerHTML = "";
 
   const needle = (filterText || "").trim().toLowerCase();
-  const filtered = (recipes || []).filter(r => !needle || r.name.toLowerCase().includes(needle));
+  const filtered = (recipes || []).filter(r => {
+    if (needle && !r.name.toLowerCase().includes(needle)) return false;
+    if (mealTypeFilter && !(r.mealTypes || []).includes(mealTypeFilter)) return false;
+    return true;
+  });
 
   if (filtered.length === 0) {
     const empty = document.createElement("p");

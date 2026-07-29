@@ -188,7 +188,12 @@
 
     <div class="section">
       <h3>📖 Recettes</h3>
-      <input id="recettes-search-kids" type="text" placeholder="Rechercher une recette..." style="width:100%; padding:0.4rem; margin-bottom:0.75rem;" />
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+        <input id="recettes-search-kids" type="text" placeholder="Rechercher une recette..." style="flex:1; min-width:180px; padding:0.4rem;" />
+        <select id="recettes-type-filter-kids" style="padding:0.4rem;">
+          <option value="">Tous les types</option>
+        </select>
+      </div>
       <div id="recettes-list-kids"></div>
     </div>
   </div>
@@ -484,7 +489,8 @@
       const container = document.getElementById("recettes-list-kids");
       if (!container) return;
       const search = document.getElementById("recettes-search-kids");
-      renderRecipesList(container, data.recipes || [], search ? search.value : "");
+      const typeFilter = document.getElementById("recettes-type-filter-kids");
+      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "");
     }
 
     function setupRepasNavKids() {
@@ -520,6 +526,17 @@
 
       const search = document.getElementById("recettes-search-kids");
       if (search) search.addEventListener("input", () => renderRecettesListKids());
+
+      const typeFilter = document.getElementById("recettes-type-filter-kids");
+      if (typeFilter) {
+        getUniqueMealTypes(data.recipes || []).forEach(type => {
+          const option = document.createElement("option");
+          option.value = type;
+          option.textContent = type;
+          typeFilter.appendChild(option);
+        });
+        typeFilter.addEventListener("change", () => renderRecettesListKids());
+      }
     }
 
     function renderChores() {
