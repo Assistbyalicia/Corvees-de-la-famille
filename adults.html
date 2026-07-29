@@ -390,7 +390,8 @@
       <div id="repas-panel-shopping" style="display:none;">
       <div class="section">
         <h3 id="repas-shopping-title">🛒 Liste de courses de la semaine</h3>
-        <p class="small">Ingrédients des recettes prévues. Coche au fur et à mesure que tu les mets dans le chariot — partagé entre tous les adultes.</p>
+        <p class="small">Ingrédients des recettes prévues. Coche au fur et à mesure que tu les mets dans le chariot — partagé entre tous les adultes. Si quelqu'un d'autre vient de cocher un ingrédient, actualise pour voir ses coches.</p>
+        <button id="repas-refresh-btn" class="btn-secondary" style="margin-bottom:0.75rem;">🔄 Actualiser</button>
         <ul class="list shopping-list" id="repas-shopping-list"></ul>
       </div>
       </div>
@@ -732,6 +733,21 @@ let repasWeekOffset = 0;
       shoppingBtn.addEventListener("click", () => { repasSubview = "shopping"; applySubview(); });
       recettesBtn.addEventListener("click", () => { repasSubview = "recettes"; applySubview(); });
       applySubview();
+
+      // Sans ce bouton, un 2e appareil ne voit les coches/menus posés par
+      // quelqu'un d'autre qu'au prochain chargement complet de la page —
+      // il n'y a pas de synchronisation automatique en direct.
+      const refreshBtn = document.getElementById("repas-refresh-btn");
+      if (refreshBtn) {
+        refreshBtn.addEventListener("click", async () => {
+          refreshBtn.disabled = true;
+          refreshBtn.textContent = "Actualisation...";
+          data = await loadAppData();
+          renderRepasTab();
+          refreshBtn.textContent = "🔄 Actualiser";
+          refreshBtn.disabled = false;
+        });
+      }
     }
 
     function renderRepasTab() {
