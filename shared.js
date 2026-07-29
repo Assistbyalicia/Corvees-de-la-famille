@@ -88,6 +88,7 @@ const defaultData = {
   personRoster: [],
   recipes: [],
   mealPlan: [],
+  shoppingChecked: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -176,6 +177,7 @@ async function loadAppData() {
       personRoster: config.personRoster || [],
       recipes: config.recipes || [],
       mealPlan: config.mealPlan || [],
+      shoppingChecked: config.shoppingChecked || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -725,6 +727,33 @@ async function postClearMealPlan(dateKey, slot) {
   }
 }
 
+// action: "check_shopping_item" / "uncheck_shopping_item" — coche partagée de
+// la liste de courses (une ligne Notion par ingrédient x période affichée),
+// pour que les cases cochées soient les mêmes sur tous les appareils.
+async function postCheckShoppingItem(periodKey, ingredientId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "check_shopping_item", periodKey, ingredientId })
+    });
+  } catch (e) {
+    console.warn("Impossible de cocher l'ingrédient dans Notion :", e);
+  }
+}
+
+async function postUncheckShoppingItem(periodKey, ingredientId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "uncheck_shopping_item", periodKey, ingredientId })
+    });
+  } catch (e) {
+    console.warn("Impossible de décocher l'ingrédient dans Notion :", e);
+  }
+}
+
 // Rendu du calendrier de garde (3 mois, décalables via monthOffset) dans
 // container, pour l'enfant childName. Partagé entre adults.html (avec
 // clic admin) et kids.html (lecture seule, onCellClick = null).
@@ -972,8 +1001,9 @@ function isRecipeMakeable(recipe) {
 // note, lien vers la recette source, ingrédients). filterText optionnel pour
 // filtrer par nom, mealTypeFilter optionnel pour filtrer par "Type de repas",
 // onlyMakeable optionnel pour ne garder que les recettes faisables avec le
-// stock actuel.
-function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyMakeable) {
+// stock actuel, onPlanClick(recipe) optionnel pour afficher un bouton
+// "Planifier" (vue adulte éditable) — omis pour la vue lecture seule.
+function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyMakeable, onPlanClick) {
   container.innerHTML = "";
 
   const needle = (filterText || "").trim().toLowerCase();
@@ -1043,32 +1073,24 @@ function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyM
       card.appendChild(linkEl);
     }
 
+    if (onPlanClick) {
+      const planBtn = document.createElement("button");
+      planBtn.type = "button";
+      planBtn.className = "btn-secondary recipe-plan-btn";
+      planBtn.textContent = "📅 Planifier";
+      planBtn.addEventListener("click", () => onPlanClick(recipe));
+      card.appendChild(planBtn);
+    }
+
     container.appendChild(card);
   });
 }
 
-// Cases cochées de la liste de courses, persistées dans localStorage (donc
-// sur cet appareil) par période affichée (une semaine ou un mois), pour
-// survivre à un rafraîchissement de page en plein magasin sans faire
-// réapparaître les ingrédients déjà cochés la fois précédente.
-const SHOPPING_CHECKED_STORAGE_KEY = "repasCheckedIngredients";
-
-function loadShoppingCheckedStore() {
-  try {
-    const raw = localStorage.getItem(SHOPPING_CHECKED_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function saveShoppingCheckedStore(store) {
-  try {
-    localStorage.setItem(SHOPPING_CHECKED_STORAGE_KEY, JSON.stringify(store));
-  } catch (e) {
-    // stockage indisponible (navigation privée, quota...) : tant pis, la
-    // case restera juste non persistée pour cette session.
-  }
+// Cases cochées de la liste de courses, partagées entre tous les adultes via
+// Notion (une ligne = coché, l'existence de la ligne fait foi) : chaque
+// appareil voit les mêmes coches après rechargement des données.
+function isIngredientChecked(shoppingChecked, periodKey, ingredientId) {
+  return (shoppingChecked || []).some(c => c.periodKey === periodKey && c.ingredientId === ingredientId);
 }
 
 function getShoppingPeriodKey(view, dates) {

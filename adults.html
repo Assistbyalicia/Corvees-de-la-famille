@@ -381,7 +381,7 @@
 
       <div class="section">
         <h3 id="repas-shopping-title">🛒 Liste de courses de la semaine</h3>
-        <p class="small">Ingrédients des recettes prévues. Coche au fur et à mesure que tu les mets dans le chariot (pas sauvegardé, juste pour t'aider en magasin).</p>
+        <p class="small">Ingrédients des recettes prévues. Coche au fur et à mesure que tu les mets dans le chariot — partagé entre tous les adultes.</p>
         <ul class="list shopping-list" id="repas-shopping-list"></ul>
       </div>
 
@@ -399,6 +399,21 @@
           ✅ Faisable maintenant uniquement (tout est déjà en stock)
         </label>
         <div id="recettes-list"></div>
+
+        <div class="section" id="recipe-plan-picker" style="display:none; margin-top:1rem; background:#FAF9FF;">
+          <h3 id="recipe-plan-title"></h3>
+          <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
+            <input id="recipe-plan-date" type="date" style="padding:0.4rem;" />
+            <select id="recipe-plan-slot" style="padding:0.4rem;">
+              <option value="Midi">🍛 Midi</option>
+              <option value="Soir">🥘 Soir</option>
+            </select>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+            <button id="recipe-plan-save" class="btn-primary">Enregistrer</button>
+            <button id="recipe-plan-cancel" class="btn-secondary">Annuler</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -714,24 +729,26 @@ let repasWeekOffset = 0;
       const items = computeShoppingList(data.recipes || [], data.mealPlan || [], dateKeys);
 
       const periodKey = getShoppingPeriodKey(repasView, dates);
-      const checkedStore = loadShoppingCheckedStore();
-      const checkedIds = new Set(checkedStore[periodKey] || []);
 
       items.forEach(item => {
         const li = document.createElement("li");
-        if (checkedIds.has(item.id)) li.classList.add("checked");
+        const isChecked = isIngredientChecked(data.shoppingChecked || [], periodKey, item.id);
+        if (isChecked) li.classList.add("checked");
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.checked = checkedIds.has(item.id);
-        checkbox.addEventListener("change", () => {
-          const store = loadShoppingCheckedStore();
-          const ids = new Set(store[periodKey] || []);
-          if (checkbox.checked) ids.add(item.id);
-          else ids.delete(item.id);
-          store[periodKey] = Array.from(ids);
-          saveShoppingCheckedStore(store);
+        checkbox.checked = isChecked;
+        checkbox.addEventListener("change", async () => {
           li.classList.toggle("checked", checkbox.checked);
+          if (checkbox.checked) {
+            data.shoppingChecked = [...(data.shoppingChecked || []), { id: `local-${periodKey}-${item.id}`, periodKey, ingredientId: item.id }];
+            saveData(data);
+            await postCheckShoppingItem(periodKey, item.id);
+          } else {
+            data.shoppingChecked = (data.shoppingChecked || []).filter(c => !(c.periodKey === periodKey && c.ingredientId === item.id));
+            saveData(data);
+            await postUncheckShoppingItem(periodKey, item.id);
+          }
         });
 
         const name = document.createElement("span");
@@ -853,22 +870,66 @@ let repasWeekOffset = 0;
       saveBtn.addEventListener("click", async () => {
         if (!repasPickerContext || !select.value) return;
         const { dateKey, slot } = repasPickerContext;
-        data.mealPlan = (data.mealPlan || []).filter(m => !(m.date === dateKey && m.slot === slot));
-        data.mealPlan.push({ id: `local-${dateKey}-${slot}`, date: dateKey, slot, recipeId: select.value });
-        saveData(data);
+        await applyMealPlanChange(dateKey, slot, select.value);
         picker.style.display = "none";
-        renderRepasTab();
-        await postSetMealPlan(dateKey, slot, select.value);
       });
 
       clearBtn.addEventListener("click", async () => {
         if (!repasPickerContext) return;
         const { dateKey, slot } = repasPickerContext;
-        data.mealPlan = (data.mealPlan || []).filter(m => !(m.date === dateKey && m.slot === slot));
-        saveData(data);
+        await applyMealPlanChange(dateKey, slot, null);
         picker.style.display = "none";
-        renderRepasTab();
-        await postClearMealPlan(dateKey, slot);
+      });
+
+      cancelBtn.addEventListener("click", () => {
+        picker.style.display = "none";
+      });
+    }
+
+    // Applique un changement de menu (recipeId truthy pour programmer,
+    // falsy pour retirer) : mise à jour optimiste locale + rendu, puis
+    // synchronisation Notion en arrière-plan. Partagé entre le picker
+    // "case du planning -> recette" et le picker "recette -> date/créneau".
+    async function applyMealPlanChange(dateKey, slot, recipeId) {
+      data.mealPlan = (data.mealPlan || []).filter(m => !(m.date === dateKey && m.slot === slot));
+      if (recipeId) {
+        data.mealPlan.push({ id: `local-${dateKey}-${slot}`, date: dateKey, slot, recipeId });
+      }
+      saveData(data);
+      renderRepasTab();
+      if (recipeId) await postSetMealPlan(dateKey, slot, recipeId);
+      else await postClearMealPlan(dateKey, slot);
+    }
+
+    // Picker "planifier depuis la recette" : choisir une date + un créneau
+    // pour une recette déjà connue (sens inverse du picker case -> recette).
+    let recipePlanContext = null; // { recipeId }
+
+    function openRecipePlanPicker(recipe) {
+      recipePlanContext = { recipeId: recipe.id };
+      const picker = document.getElementById("recipe-plan-picker");
+      const title = document.getElementById("recipe-plan-title");
+      const dateInput = document.getElementById("recipe-plan-date");
+      if (!picker || !title || !dateInput) return;
+
+      title.textContent = `Planifier : ${recipe.name}`;
+      dateInput.value = gardeDateKey(new Date());
+      picker.style.display = "block";
+      picker.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function setupRecipePlanPicker() {
+      const picker = document.getElementById("recipe-plan-picker");
+      const dateInput = document.getElementById("recipe-plan-date");
+      const slotSelect = document.getElementById("recipe-plan-slot");
+      const saveBtn = document.getElementById("recipe-plan-save");
+      const cancelBtn = document.getElementById("recipe-plan-cancel");
+      if (!picker || !dateInput || !slotSelect || !saveBtn || !cancelBtn) return;
+
+      saveBtn.addEventListener("click", async () => {
+        if (!recipePlanContext || !dateInput.value) return;
+        await applyMealPlanChange(dateInput.value, slotSelect.value, recipePlanContext.recipeId);
+        picker.style.display = "none";
       });
 
       cancelBtn.addEventListener("click", () => {
@@ -935,7 +996,7 @@ let repasWeekOffset = 0;
       const search = document.getElementById("recettes-search");
       const typeFilter = document.getElementById("recettes-type-filter");
       const onlyMakeable = document.getElementById("recettes-only-makeable");
-      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false);
+      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false, openRecipePlanPicker);
     }
 
     // Gestion des blocs de vacances (admin uniquement) : ajout/suppression
@@ -2239,6 +2300,7 @@ let repasWeekOffset = 0;
       renderRepasTab();
       setupMealPicker();
       setupRepasNav();
+      setupRecipePlanPicker();
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);

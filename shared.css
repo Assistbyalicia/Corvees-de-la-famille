@@ -514,6 +514,11 @@ tfoot td {
 .recipe-link:hover {
   text-decoration: underline;
 }
+.recipe-plan-btn {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
 
 .shopping-list {
   list-style: none;
