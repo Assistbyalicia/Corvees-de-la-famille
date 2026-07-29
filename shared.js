@@ -89,6 +89,7 @@ const defaultData = {
   recipes: [],
   mealPlan: [],
   shoppingChecked: [],
+  recurringIngredients: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -178,6 +179,7 @@ async function loadAppData() {
       recipes: config.recipes || [],
       mealPlan: config.mealPlan || [],
       shoppingChecked: config.shoppingChecked || [],
+      recurringIngredients: config.recurringIngredients || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -727,6 +729,49 @@ async function postClearMealPlan(dateKey, slot) {
   }
 }
 
+// action: "propose_meal" — un enfant suggère une recette pour un jour +
+// créneau encore vide ; reste "en attente" (mealPlan[].pending côté config)
+// jusqu'à ce qu'un adulte approuve ou refuse la proposition.
+async function postProposeMeal(dateKey, slot, recipeId, personId) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "propose_meal", date: dateKey, slot, recipeId, personId })
+    });
+  } catch (e) {
+    console.warn("Impossible d'enregistrer la proposition de repas dans Notion :", e);
+  }
+}
+
+// action: "approve_meal_proposal" — un adulte valide la proposition, qui
+// devient un menu confirmé normal.
+async function postApproveMealProposal(dateKey, slot) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve_meal_proposal", date: dateKey, slot })
+    });
+  } catch (e) {
+    console.warn("Impossible d'approuver la proposition de repas dans Notion :", e);
+  }
+}
+
+// action: "reject_meal_proposal" — un adulte refuse la proposition, qui est
+// supprimée.
+async function postRejectMealProposal(dateKey, slot) {
+  try {
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject_meal_proposal", date: dateKey, slot })
+    });
+  } catch (e) {
+    console.warn("Impossible de refuser la proposition de repas dans Notion :", e);
+  }
+}
+
 // action: "check_shopping_item" / "uncheck_shopping_item" — coche partagée de
 // la liste de courses (une ligne Notion par ingrédient x période affichée),
 // pour que les cases cochées soient les mêmes sur tous les appareils.
@@ -864,7 +909,38 @@ function findRecipeById(recipes, recipeId) {
 // (dateKey, slot, currentRecipeId, dateObj) est optionnel : le passer rend
 // les cases cliquables (vue adulte éditable) ; l'omettre donne une vue
 // lecture seule (vue enfant).
-function renderMealPlanWeek(container, recipes, mealPlan, weekOffset, onCellClick) {
+// Remplit une case du planning repas (grille semaine ou liste mois) : texte +
+// classes + interactions, selon que l'entrée est confirmée, en attente
+// (proposée par un enfant) ou vide. onCellClick (adulte) permet de
+// choisir/changer n'importe quelle case. onProposeClick (enfant, seulement
+// si onCellClick est absent) ne s'applique qu'aux cases vides, pour suggérer
+// une recette sans pouvoir écraser un menu déjà confirmé.
+function fillMealCell(cell, entry, recipe, dateKey, slot, dateObj, onCellClick, onProposeClick, labelPrefix) {
+  const prefix = labelPrefix ? `${labelPrefix} : ` : "";
+  const text = document.createElement("span");
+
+  if (recipe && entry && entry.pending) {
+    cell.classList.add("pending");
+    text.textContent = `${prefix}⏳ ${recipe.name} (proposé)`;
+  } else if (recipe) {
+    cell.classList.add("filled");
+    text.textContent = `${prefix}${recipe.name}`;
+  } else {
+    text.className = "meal-cell-placeholder";
+    text.textContent = `${prefix}${onCellClick || onProposeClick ? "+ Ajouter" : "—"}`;
+  }
+  cell.appendChild(text);
+
+  if (onCellClick) {
+    cell.classList.add("clickable");
+    cell.addEventListener("click", () => onCellClick(dateKey, slot, entry ? entry.recipeId : null, dateObj));
+  } else if (onProposeClick && !recipe) {
+    cell.classList.add("clickable");
+    cell.addEventListener("click", () => onProposeClick(dateKey, slot, dateObj));
+  }
+}
+
+function renderMealPlanWeek(container, recipes, mealPlan, weekOffset, onCellClick, onProposeClick) {
   container.innerHTML = "";
   container.style.overflowX = "auto";
 
@@ -897,17 +973,8 @@ function renderMealPlanWeek(container, recipes, mealPlan, weekOffset, onCellClic
       const recipe = entry ? findRecipeById(recipes, entry.recipeId) : null;
 
       const cell = document.createElement("div");
-      cell.className = "meal-cell" + (recipe ? " filled" : "") + (gardeSameDay(d, today) ? " today" : "");
-
-      const text = document.createElement("span");
-      text.textContent = recipe ? recipe.name : (onCellClick ? "+ Ajouter" : "—");
-      if (!recipe) text.className = "meal-cell-placeholder";
-      cell.appendChild(text);
-
-      if (onCellClick) {
-        cell.classList.add("clickable");
-        cell.addEventListener("click", () => onCellClick(dateKey, slotDef.value, entry ? entry.recipeId : null, d));
-      }
+      cell.className = "meal-cell" + (gardeSameDay(d, today) ? " today" : "");
+      fillMealCell(cell, entry, recipe, dateKey, slotDef.value, d, onCellClick, onProposeClick);
 
       grid.appendChild(cell);
     });
@@ -934,7 +1001,7 @@ function getMonthDates(monthOffset) {
 // Rend une liste "un jour par ligne" (toutes les dates du mois), chaque ligne
 // ayant une case par créneau repas. Mêmes conventions que renderMealPlanWeek :
 // onCellClick optionnel pour la vue éditable, omis pour la vue lecture seule.
-function renderMealPlanMonth(container, recipes, mealPlan, monthOffset, onCellClick) {
+function renderMealPlanMonth(container, recipes, mealPlan, monthOffset, onCellClick, onProposeClick) {
   container.innerHTML = "";
 
   const dates = getMonthDates(monthOffset || 0);
@@ -961,17 +1028,8 @@ function renderMealPlanMonth(container, recipes, mealPlan, monthOffset, onCellCl
       const recipe = entry ? findRecipeById(recipes, entry.recipeId) : null;
 
       const cell = document.createElement("div");
-      cell.className = "meal-cell meal-month-cell" + (recipe ? " filled" : "");
-
-      const text = document.createElement("span");
-      text.textContent = `${slotDef.label} : ${recipe ? recipe.name : (onCellClick ? "+ Ajouter" : "—")}`;
-      if (!recipe) text.className = "meal-cell-placeholder";
-      cell.appendChild(text);
-
-      if (onCellClick) {
-        cell.classList.add("clickable");
-        cell.addEventListener("click", () => onCellClick(dateKey, slotDef.value, entry ? entry.recipeId : null, d));
-      }
+      cell.className = "meal-cell meal-month-cell";
+      fillMealCell(cell, entry, recipe, dateKey, slotDef.value, d, onCellClick, onProposeClick, slotDef.label);
 
       row.appendChild(cell);
     });
@@ -1050,6 +1108,7 @@ function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyM
     const totalMin = (recipe.prepMin || 0) + (recipe.cookMin || 0);
     if (totalMin > 0) metaParts.push(`⏱️ ${totalMin} min`);
     if (recipe.note) metaParts.push(recipe.note);
+    if (recipe.lastMade) metaParts.push(`Dernière fois : ${recipe.lastMade}`);
     if (metaParts.length > 0) {
       const metaEl = document.createElement("div");
       metaEl.className = "recipe-meta";
@@ -1105,12 +1164,14 @@ function getShoppingPeriodKey(view, dates) {
 // Construit la liste de courses à partir des menus programmés sur les
 // dateKeys données (typiquement la semaine affichée) : union dédupliquée des
 // ingrédients de chaque recette prévue, avec les recettes qui les utilisent.
-function computeShoppingList(recipes, mealPlan, dateKeys) {
+// recurringIngredients (papier toilette, litière...) sont ajoutés en plus,
+// indépendamment de tout menu, car à racheter régulièrement.
+function computeShoppingList(recipes, mealPlan, dateKeys, recurringIngredients) {
   const keySet = new Set(dateKeys);
   const byIngredient = {};
 
   (mealPlan || [])
-    .filter(entry => keySet.has(entry.date))
+    .filter(entry => keySet.has(entry.date) && !entry.pending)
     .forEach(entry => {
       const recipe = findRecipeById(recipes, entry.recipeId);
       if (!recipe) return;
@@ -1124,6 +1185,13 @@ function computeShoppingList(recipes, mealPlan, dateKeys) {
         }
       });
     });
+
+  (recurringIngredients || []).forEach(ing => {
+    if (!byIngredient[ing.id]) {
+      byIngredient[ing.id] = { ...ing, recipes: [], count: 0 };
+    }
+    byIngredient[ing.id].recurring = true;
+  });
 
   return Object.values(byIngredient).sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }

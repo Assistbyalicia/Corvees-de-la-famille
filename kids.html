@@ -178,7 +178,7 @@
     <div id="repas-panel-planning-kids">
     <div class="section">
       <h2 id="repas-title-kids">🍽️ On mange quoi ?</h2>
-      <p class="small">Le menu de la semaine, décidé par les adultes.</p>
+      <p class="small">Le menu, décidé par les adultes. Sur une case vide, tu peux proposer une recette !</p>
       <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
         <button id="repas-view-week-kids" class="btn-secondary">Semaine</button>
         <button id="repas-view-month-kids" class="btn-secondary">Mois</button>
@@ -190,6 +190,15 @@
       </div>
       <div id="repas-grid-kids"></div>
       <div id="repas-grid-month-kids" style="display:none;"></div>
+
+      <div class="section" id="repas-propose-picker" style="display:none; margin-top:1rem; background:#FAF9FF;">
+        <h3 id="repas-propose-title"></h3>
+        <select id="repas-propose-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;"></select>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+          <button id="repas-propose-save" class="btn-primary">Proposer</button>
+          <button id="repas-propose-cancel" class="btn-secondary">Annuler</button>
+        </div>
+      </div>
     </div>
     </div>
 
@@ -506,13 +515,13 @@
       if (repasViewKids === "week") {
         weekContainer.style.display = "";
         monthContainer.style.display = "none";
-        renderMealPlanWeek(weekContainer, data.recipes || [], data.mealPlan || [], repasWeekOffsetKids, null);
+        renderMealPlanWeek(weekContainer, data.recipes || [], data.mealPlan || [], repasWeekOffsetKids, null, openMealProposePicker);
         if (title) title.textContent = "🍽️ On mange quoi cette semaine ?";
         if (todayBtn) todayBtn.textContent = "Cette semaine";
       } else {
         weekContainer.style.display = "none";
         monthContainer.style.display = "";
-        renderMealPlanMonth(monthContainer, data.recipes || [], data.mealPlan || [], repasMonthOffsetKids, null);
+        renderMealPlanMonth(monthContainer, data.recipes || [], data.mealPlan || [], repasMonthOffsetKids, null, openMealProposePicker);
         if (title) title.textContent = "🍽️ On mange quoi ce mois-ci ?";
         if (todayBtn) todayBtn.textContent = "Ce mois-ci";
       }
@@ -527,6 +536,70 @@
       const typeFilter = document.getElementById("recettes-type-filter-kids");
       const onlyMakeable = document.getElementById("recettes-only-makeable-kids");
       renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false);
+    }
+
+    // Un enfant peut proposer une recette pour une case encore vide ; ça reste
+    // "en attente" jusqu'à validation par un adulte (voir adults.html).
+    let repasProposeContext = null; // { dateKey, slot }
+
+    function openMealProposePicker(dateKey, slot, dateObj) {
+      if (!data.activeChildId) {
+        alert("Choisis d'abord ton prénom dans l'onglet Enfants.");
+        return;
+      }
+      repasProposeContext = { dateKey, slot };
+      const picker = document.getElementById("repas-propose-picker");
+      const title = document.getElementById("repas-propose-title");
+      const select = document.getElementById("repas-propose-select");
+      if (!picker || !title || !select) return;
+
+      const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      const slotLabel = (MEAL_SLOTS.find(s => s.value === slot) || {}).label || slot;
+      title.textContent = `Proposer : ${dayFmt.format(dateObj)} — ${slotLabel}`;
+
+      select.innerHTML = "";
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "— Choisir une recette —";
+      select.appendChild(emptyOption);
+      (data.recipes || []).forEach(recipe => {
+        const option = document.createElement("option");
+        option.value = recipe.id;
+        option.textContent = recipe.name;
+        select.appendChild(option);
+      });
+
+      picker.style.display = "block";
+      picker.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function setupMealProposePicker() {
+      const picker = document.getElementById("repas-propose-picker");
+      const select = document.getElementById("repas-propose-select");
+      const saveBtn = document.getElementById("repas-propose-save");
+      const cancelBtn = document.getElementById("repas-propose-cancel");
+      if (!picker || !select || !saveBtn || !cancelBtn) return;
+
+      saveBtn.addEventListener("click", async () => {
+        if (!repasProposeContext || !select.value || !data.activeChildId) return;
+        const { dateKey, slot } = repasProposeContext;
+        data.mealPlan = [...(data.mealPlan || []), {
+          id: `local-${dateKey}-${slot}`,
+          date: dateKey,
+          slot,
+          recipeId: select.value,
+          pending: true,
+          proposedBy: data.activeChildId
+        }];
+        saveData(data);
+        picker.style.display = "none";
+        renderRepasKids();
+        await postProposeMeal(dateKey, slot, select.value, data.activeChildId);
+      });
+
+      cancelBtn.addEventListener("click", () => {
+        picker.style.display = "none";
+      });
     }
 
     function setupRepasNavKids() {
@@ -828,6 +901,7 @@
       renderOfflineBadge(data);
       setupGardeNavKids();
       setupRepasNavKids();
+      setupMealProposePicker();
       setupRepasSubnavKids();
       renderAll();
       renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);

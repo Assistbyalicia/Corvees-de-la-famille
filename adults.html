@@ -164,7 +164,10 @@
       <button class="tab-btn" data-tab="codes" data-label="Codes">Codes</button>
       <button class="tab-btn" data-tab="recap" data-label="Récap">Récap</button>
       <button class="tab-btn" data-tab="garde" data-label="🏰 Planning garde">🏰 Planning garde</button>
-      <button class="tab-btn" data-tab="repas" data-label="🍽️ Repas">🍽️ Repas</button>
+      <button class="tab-btn" data-tab="repas" data-label="🍽️ Repas">
+        🍽️ Repas
+        <span id="repas-tab-badge" class="tab-badge" style="display:none;"></span>
+      </button>
       <button class="tab-btn" data-tab="compte" data-label="Mon compte">Mon compte</button>
     </div>
 
@@ -384,6 +387,12 @@
             <button id="repas-picker-cancel" class="btn-secondary">Annuler</button>
           </div>
         </div>
+      </div>
+
+      <div class="section">
+        <h3>🙋 Propositions en attente</h3>
+        <p class="small">Repas suggérés par les enfants pour un créneau encore vide : valide ou refuse.</p>
+        <ul class="list" id="repas-proposals-list"></ul>
       </div>
       </div>
 
@@ -776,6 +785,81 @@ let repasWeekOffset = 0;
 
       renderShoppingListSection();
       renderRecettesListSection();
+      renderMealProposalsList();
+    }
+
+    function renderRepasTabBadge() {
+      const badge = document.getElementById("repas-tab-badge");
+      if (!badge) return;
+      const count = (data.mealPlan || []).filter(m => m.pending).length;
+      if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = "block";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+
+    function renderMealProposalsList() {
+      const list = document.getElementById("repas-proposals-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      renderRepasTabBadge();
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const slotLabelByValue = Object.fromEntries(MEAL_SLOTS.map(s => [s.value, s.label]));
+      const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+      const proposals = (data.mealPlan || []).filter(m => m.pending);
+
+      proposals.forEach(entry => {
+        const li = document.createElement("li");
+
+        const recipe = findRecipeById(data.recipes || [], entry.recipeId);
+        const proposer = allPeople.find(p => p.id === entry.proposedBy);
+        const dateLabel = dayFmt.format(new Date(`${entry.date}T00:00:00`));
+        const slotLabel = slotLabelByValue[entry.slot] || entry.slot;
+
+        const left = document.createElement("span");
+        left.textContent = `${dateLabel} ${slotLabel} — ${recipe ? recipe.name : "?"}${proposer ? ` (proposé par ${proposer.name})` : ""}`;
+
+        const right = document.createElement("div");
+        right.style.display = "flex";
+        right.style.gap = "0.5rem";
+
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "btn-primary";
+        approveBtn.textContent = "Valider";
+        approveBtn.addEventListener("click", async () => {
+          entry.pending = false;
+          saveData(data);
+          renderRepasTab();
+          await postApproveMealProposal(entry.date, entry.slot);
+        });
+
+        const rejectBtn = document.createElement("button");
+        rejectBtn.className = "btn-danger";
+        rejectBtn.textContent = "Refuser";
+        rejectBtn.addEventListener("click", async () => {
+          if (!confirm(`Refuser la proposition « ${recipe ? recipe.name : ""} » ?`)) return;
+          data.mealPlan = (data.mealPlan || []).filter(m => m !== entry);
+          saveData(data);
+          renderRepasTab();
+          await postRejectMealProposal(entry.date, entry.slot);
+        });
+
+        right.appendChild(approveBtn);
+        right.appendChild(rejectBtn);
+        li.appendChild(left);
+        li.appendChild(right);
+        list.appendChild(li);
+      });
+
+      if (proposals.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune proposition en attente.";
+        list.appendChild(li);
+      }
     }
 
     function renderShoppingListSection() {
@@ -785,7 +869,7 @@ let repasWeekOffset = 0;
 
       const dates = repasView === "week" ? getWeekDates(repasWeekOffset) : getMonthDates(repasMonthOffset);
       const dateKeys = dates.map(d => gardeDateKey(d));
-      const items = computeShoppingList(data.recipes || [], data.mealPlan || [], dateKeys);
+      const items = computeShoppingList(data.recipes || [], data.mealPlan || [], dateKeys, data.recurringIngredients || []);
 
       const periodKey = getShoppingPeriodKey(repasView, dates);
 
@@ -829,6 +913,13 @@ let repasWeekOffset = 0;
           stockBadge.className = "ing-stock";
           stockBadge.textContent = `${item.inStock} en stock`;
           li.appendChild(stockBadge);
+        }
+
+        if (item.recurring) {
+          const recurringBadge = document.createElement("span");
+          recurringBadge.className = "ing-recurring";
+          recurringBadge.textContent = "🔁 récurrent";
+          li.appendChild(recurringBadge);
         }
 
         const meta = document.createElement("span");
