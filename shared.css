@@ -437,6 +437,73 @@ tfoot td {
   transform: translateY(-2px);
 }
 
+.meal-month-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.meal-month-row {
+  display: grid;
+  grid-template-columns: 100px repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  align-items: stretch;
+}
+.meal-month-row.today .meal-month-day {
+  color: var(--color-primary);
+}
+.meal-month-day {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.meal-month-cell {
+  justify-content: flex-start;
+  text-align: left;
+  font-weight: 500;
+}
+
+.recipe-card {
+  background: #FAF9FF;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.recipe-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.recipe-tags {
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  margin-top: 0.15rem;
+}
+.recipe-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 0.15rem;
+}
+.recipe-ingredients {
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+}
+.recipe-link {
+  display: inline-block;
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+.recipe-link:hover {
+  text-decoration: underline;
+}
+
 .shopping-list {
   list-style: none;
   padding: 0;
@@ -546,7 +613,8 @@ tfoot td {
   th,
   tfoot td,
   .garde-cell.none,
-  .meal-cell {
+  .meal-cell,
+  .recipe-card {
     background: #29243a;
   }
   button {

@@ -886,6 +886,138 @@ function renderMealPlanWeek(container, recipes, mealPlan, weekOffset, onCellClic
   container.appendChild(grid);
 }
 
+// Tous les jours (du 1er au dernier) du mois décalé de monthOffset mois par
+// rapport au mois en cours (0 = mois actuel).
+function getMonthDates(monthOffset) {
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth() + (monthOffset || 0), 1);
+  const dates = [];
+  const month = first.getMonth();
+  const d = new Date(first);
+  while (d.getMonth() === month) {
+    dates.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+// Rend une liste "un jour par ligne" (toutes les dates du mois), chaque ligne
+// ayant une case par créneau repas. Mêmes conventions que renderMealPlanWeek :
+// onCellClick optionnel pour la vue éditable, omis pour la vue lecture seule.
+function renderMealPlanMonth(container, recipes, mealPlan, monthOffset, onCellClick) {
+  container.innerHTML = "";
+
+  const dates = getMonthDates(monthOffset || 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dowFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short" });
+  const dayFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+  const list = document.createElement("div");
+  list.className = "meal-month-list";
+
+  dates.forEach(d => {
+    const dateKey = gardeDateKey(d);
+    const row = document.createElement("div");
+    row.className = "meal-month-row" + (gardeSameDay(d, today) ? " today" : "");
+
+    const label = document.createElement("div");
+    label.className = "meal-month-day";
+    label.textContent = `${dowFmt.format(d)} ${dayFmt.format(d)}`;
+    row.appendChild(label);
+
+    MEAL_SLOTS.forEach(slotDef => {
+      const entry = findMealPlanEntry(mealPlan, dateKey, slotDef.value);
+      const recipe = entry ? findRecipeById(recipes, entry.recipeId) : null;
+
+      const cell = document.createElement("div");
+      cell.className = "meal-cell meal-month-cell" + (recipe ? " filled" : "");
+
+      const text = document.createElement("span");
+      text.textContent = `${slotDef.label} : ${recipe ? recipe.name : (onCellClick ? "+ Ajouter" : "—")}`;
+      if (!recipe) text.className = "meal-cell-placeholder";
+      cell.appendChild(text);
+
+      if (onCellClick) {
+        cell.classList.add("clickable");
+        cell.addEventListener("click", () => onCellClick(dateKey, slotDef.value, entry ? entry.recipeId : null, d));
+      }
+
+      row.appendChild(cell);
+    });
+
+    list.appendChild(row);
+  });
+
+  container.appendChild(list);
+}
+
+// Rend la liste consultable des recettes (fiche par recette : tags, temps,
+// note, lien vers la recette source, ingrédients). filterText optionnel pour
+// filtrer par nom.
+function renderRecipesList(container, recipes, filterText) {
+  container.innerHTML = "";
+
+  const needle = (filterText || "").trim().toLowerCase();
+  const filtered = (recipes || []).filter(r => !needle || r.name.toLowerCase().includes(needle));
+
+  if (filtered.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "Aucune recette trouvée.";
+    container.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach(recipe => {
+    const card = document.createElement("div");
+    card.className = "recipe-card";
+
+    const name = document.createElement("div");
+    name.className = "recipe-name";
+    name.textContent = recipe.name;
+    card.appendChild(name);
+
+    const tags = [...(recipe.mealCategories || []), ...(recipe.mealTypes || [])];
+    if (tags.length > 0) {
+      const tagsEl = document.createElement("div");
+      tagsEl.className = "recipe-tags";
+      tagsEl.textContent = tags.join(" · ");
+      card.appendChild(tagsEl);
+    }
+
+    const metaParts = [];
+    const totalMin = (recipe.prepMin || 0) + (recipe.cookMin || 0);
+    if (totalMin > 0) metaParts.push(`⏱️ ${totalMin} min`);
+    if (recipe.note) metaParts.push(recipe.note);
+    if (metaParts.length > 0) {
+      const metaEl = document.createElement("div");
+      metaEl.className = "recipe-meta";
+      metaEl.textContent = metaParts.join("  ·  ");
+      card.appendChild(metaEl);
+    }
+
+    if ((recipe.ingredients || []).length > 0) {
+      const ingEl = document.createElement("div");
+      ingEl.className = "recipe-ingredients";
+      ingEl.textContent = recipe.ingredients.map(i => i.name).join(", ");
+      card.appendChild(ingEl);
+    }
+
+    if (recipe.link) {
+      const linkEl = document.createElement("a");
+      linkEl.className = "recipe-link";
+      linkEl.href = recipe.link;
+      linkEl.target = "_blank";
+      linkEl.rel = "noopener noreferrer";
+      linkEl.textContent = "Voir la recette ↗";
+      card.appendChild(linkEl);
+    }
+
+    container.appendChild(card);
+  });
+}
+
 // Construit la liste de courses à partir des menus programmés sur les
 // dateKeys données (typiquement la semaine affichée) : union dédupliquée des
 // ingrédients de chaque recette prévue, avec les recettes qui les utilisent.
