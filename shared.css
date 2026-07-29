@@ -478,6 +478,17 @@ tfoot td {
   font-weight: 700;
   font-size: 0.95rem;
 }
+.recipe-makeable-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: #E8F8EE;
+  color: #16794A;
+  vertical-align: middle;
+}
 .recipe-tags {
   font-size: 0.75rem;
   color: var(--color-primary);

@@ -364,6 +364,12 @@
 
         <div class="section" id="repas-picker" style="display:none; margin-top:1rem; background:#FAF9FF;">
           <h3 id="repas-picker-title"></h3>
+          <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
+            <input id="repas-picker-search" type="text" placeholder="Rechercher une recette..." style="flex:1; min-width:150px; padding:0.4rem;" />
+            <select id="repas-picker-type-filter" style="padding:0.4rem;">
+              <option value="">Tous les types</option>
+            </select>
+          </div>
           <select id="repas-picker-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;"></select>
           <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
             <button id="repas-picker-save" class="btn-primary">Enregistrer</button>
@@ -388,6 +394,10 @@
             <option value="">Tous les types</option>
           </select>
         </div>
+        <label style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.75rem; font-size:0.9rem;">
+          <input id="recettes-only-makeable" type="checkbox" />
+          ✅ Faisable maintenant uniquement (tout est déjà en stock)
+        </label>
         <div id="recettes-list"></div>
       </div>
     </div>
@@ -665,7 +675,6 @@ let repasWeekOffset = 0;
     let repasMonthOffset = 0;
     let repasView = "week"; // "week" | "month"
     let repasPickerContext = null; // { dateKey, slot } en cours d'édition
-    const repasCheckedIngredients = new Set(); // coché "dans le chariot", local à la session, non sauvegardé
 
     function renderRepasTab() {
       const weekContainer = document.getElementById("repas-grid");
@@ -704,16 +713,24 @@ let repasWeekOffset = 0;
       const dateKeys = dates.map(d => gardeDateKey(d));
       const items = computeShoppingList(data.recipes || [], data.mealPlan || [], dateKeys);
 
+      const periodKey = getShoppingPeriodKey(repasView, dates);
+      const checkedStore = loadShoppingCheckedStore();
+      const checkedIds = new Set(checkedStore[periodKey] || []);
+
       items.forEach(item => {
         const li = document.createElement("li");
-        if (repasCheckedIngredients.has(item.id)) li.classList.add("checked");
+        if (checkedIds.has(item.id)) li.classList.add("checked");
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.checked = repasCheckedIngredients.has(item.id);
+        checkbox.checked = checkedIds.has(item.id);
         checkbox.addEventListener("change", () => {
-          if (checkbox.checked) repasCheckedIngredients.add(item.id);
-          else repasCheckedIngredients.delete(item.id);
+          const store = loadShoppingCheckedStore();
+          const ids = new Set(store[periodKey] || []);
+          if (checkbox.checked) ids.add(item.id);
+          else ids.delete(item.id);
+          store[periodKey] = Array.from(ids);
+          saveShoppingCheckedStore(store);
           li.classList.toggle("checked", checkbox.checked);
         });
 
@@ -754,39 +771,84 @@ let repasWeekOffset = 0;
     }
 
     function openMealPicker(dateKey, slot, currentRecipeId, dateObj) {
-      repasPickerContext = { dateKey, slot };
+      repasPickerContext = { dateKey, slot, currentRecipeId };
       const picker = document.getElementById("repas-picker");
       const title = document.getElementById("repas-picker-title");
-      const select = document.getElementById("repas-picker-select");
-      if (!picker || !title || !select) return;
+      const search = document.getElementById("repas-picker-search");
+      const typeFilter = document.getElementById("repas-picker-type-filter");
+      if (!picker || !title || !search || !typeFilter) return;
 
       const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
       const slotLabel = (MEAL_SLOTS.find(s => s.value === slot) || {}).label || slot;
       title.textContent = `${dayFmt.format(dateObj)} — ${slotLabel}`;
+
+      search.value = "";
+      typeFilter.innerHTML = '<option value="">Tous les types</option>';
+      getUniqueMealTypes(data.recipes || []).forEach(type => {
+        const option = document.createElement("option");
+        option.value = type;
+        option.textContent = type;
+        typeFilter.appendChild(option);
+      });
+      typeFilter.value = "";
+
+      populateMealPickerSelect();
+      picker.style.display = "block";
+    }
+
+    // Reconstruit les options du <select> de recette à partir de la recherche
+    // et du filtre type en cours, en gardant toujours la recette déjà
+    // programmée dans la liste même si elle ne correspond plus au filtre (pour
+    // ne pas la perdre accidentellement si on enregistre sans la changer).
+    function populateMealPickerSelect() {
+      const select = document.getElementById("repas-picker-select");
+      const search = document.getElementById("repas-picker-search");
+      const typeFilter = document.getElementById("repas-picker-type-filter");
+      if (!select || !repasPickerContext) return;
+
+      const previousValue = select.value;
+      const currentRecipeId = repasPickerContext.currentRecipeId;
+      const needle = (search.value || "").trim().toLowerCase();
+      const typeValue = typeFilter.value;
+
+      let filtered = (data.recipes || []).filter(r => {
+        if (needle && !r.name.toLowerCase().includes(needle)) return false;
+        if (typeValue && !(r.mealTypes || []).includes(typeValue)) return false;
+        return true;
+      });
+      if (currentRecipeId && !filtered.some(r => r.id === currentRecipeId)) {
+        const current = findRecipeById(data.recipes || [], currentRecipeId);
+        if (current) filtered = [current, ...filtered];
+      }
 
       select.innerHTML = "";
       const emptyOption = document.createElement("option");
       emptyOption.value = "";
       emptyOption.textContent = "— Choisir une recette —";
       select.appendChild(emptyOption);
-      (data.recipes || []).forEach(recipe => {
+      filtered.forEach(recipe => {
         const option = document.createElement("option");
         option.value = recipe.id;
         option.textContent = recipe.name;
         select.appendChild(option);
       });
-      select.value = currentRecipeId || "";
 
-      picker.style.display = "block";
+      const keepValue = previousValue && filtered.some(r => r.id === previousValue) ? previousValue : (currentRecipeId || "");
+      select.value = keepValue;
     }
 
     function setupMealPicker() {
       const picker = document.getElementById("repas-picker");
       const select = document.getElementById("repas-picker-select");
+      const search = document.getElementById("repas-picker-search");
+      const typeFilter = document.getElementById("repas-picker-type-filter");
       const saveBtn = document.getElementById("repas-picker-save");
       const clearBtn = document.getElementById("repas-picker-clear");
       const cancelBtn = document.getElementById("repas-picker-cancel");
-      if (!picker || !select || !saveBtn || !clearBtn || !cancelBtn) return;
+      if (!picker || !select || !search || !typeFilter || !saveBtn || !clearBtn || !cancelBtn) return;
+
+      search.addEventListener("input", populateMealPickerSelect);
+      typeFilter.addEventListener("change", populateMealPickerSelect);
 
       saveBtn.addEventListener("click", async () => {
         if (!repasPickerContext || !select.value) return;
@@ -860,6 +922,11 @@ let repasWeekOffset = 0;
         });
         typeFilter.addEventListener("change", () => renderRecettesListSection());
       }
+
+      const onlyMakeable = document.getElementById("recettes-only-makeable");
+      if (onlyMakeable) {
+        onlyMakeable.addEventListener("change", () => renderRecettesListSection());
+      }
     }
 
     function renderRecettesListSection() {
@@ -867,7 +934,8 @@ let repasWeekOffset = 0;
       if (!container) return;
       const search = document.getElementById("recettes-search");
       const typeFilter = document.getElementById("recettes-type-filter");
-      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "");
+      const onlyMakeable = document.getElementById("recettes-only-makeable");
+      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false);
     }
 
     // Gestion des blocs de vacances (admin uniquement) : ajout/suppression

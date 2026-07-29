@@ -194,6 +194,10 @@
           <option value="">Tous les types</option>
         </select>
       </div>
+      <label style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.75rem; font-size:0.9rem;">
+        <input id="recettes-only-makeable-kids" type="checkbox" />
+        ✅ Faisable maintenant uniquement (tout est déjà en stock)
+      </label>
       <div id="recettes-list-kids"></div>
     </div>
   </div>
@@ -490,7 +494,8 @@
       if (!container) return;
       const search = document.getElementById("recettes-search-kids");
       const typeFilter = document.getElementById("recettes-type-filter-kids");
-      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "");
+      const onlyMakeable = document.getElementById("recettes-only-makeable-kids");
+      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false);
     }
 
     function setupRepasNavKids() {
@@ -536,6 +541,11 @@
           typeFilter.appendChild(option);
         });
         typeFilter.addEventListener("change", () => renderRecettesListKids());
+      }
+
+      const onlyMakeable = document.getElementById("recettes-only-makeable-kids");
+      if (onlyMakeable) {
+        onlyMakeable.addEventListener("change", () => renderRecettesListKids());
       }
     }
 

@@ -960,16 +960,27 @@ function getUniqueMealTypes(recipes) {
   return Array.from(set).sort((a, b) => a.localeCompare(b, "fr"));
 }
 
+// Une recette est "faisable maintenant" si tous ses ingrédients sont en stock
+// (>0). Une recette sans ingrédients répertoriés n'est pas considérée comme
+// faisable (donnée manquante, pas une vraie recette "prête").
+function isRecipeMakeable(recipe) {
+  const ingredients = recipe.ingredients || [];
+  return ingredients.length > 0 && ingredients.every(ing => (ing.inStock || 0) > 0);
+}
+
 // Rend la liste consultable des recettes (fiche par recette : tags, temps,
 // note, lien vers la recette source, ingrédients). filterText optionnel pour
-// filtrer par nom, mealTypeFilter optionnel pour filtrer par "Type de repas".
-function renderRecipesList(container, recipes, filterText, mealTypeFilter) {
+// filtrer par nom, mealTypeFilter optionnel pour filtrer par "Type de repas",
+// onlyMakeable optionnel pour ne garder que les recettes faisables avec le
+// stock actuel.
+function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyMakeable) {
   container.innerHTML = "";
 
   const needle = (filterText || "").trim().toLowerCase();
   const filtered = (recipes || []).filter(r => {
     if (needle && !r.name.toLowerCase().includes(needle)) return false;
     if (mealTypeFilter && !(r.mealTypes || []).includes(mealTypeFilter)) return false;
+    if (onlyMakeable && !isRecipeMakeable(r)) return false;
     return true;
   });
 
@@ -988,6 +999,12 @@ function renderRecipesList(container, recipes, filterText, mealTypeFilter) {
     const name = document.createElement("div");
     name.className = "recipe-name";
     name.textContent = recipe.name;
+    if (isRecipeMakeable(recipe)) {
+      const badge = document.createElement("span");
+      badge.className = "recipe-makeable-badge";
+      badge.textContent = "✅ Faisable maintenant";
+      name.appendChild(badge);
+    }
     card.appendChild(name);
 
     const tags = [...(recipe.mealCategories || []), ...(recipe.mealTypes || [])];
@@ -1028,6 +1045,38 @@ function renderRecipesList(container, recipes, filterText, mealTypeFilter) {
 
     container.appendChild(card);
   });
+}
+
+// Cases cochées de la liste de courses, persistées dans localStorage (donc
+// sur cet appareil) par période affichée (une semaine ou un mois), pour
+// survivre à un rafraîchissement de page en plein magasin sans faire
+// réapparaître les ingrédients déjà cochés la fois précédente.
+const SHOPPING_CHECKED_STORAGE_KEY = "repasCheckedIngredients";
+
+function loadShoppingCheckedStore() {
+  try {
+    const raw = localStorage.getItem(SHOPPING_CHECKED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveShoppingCheckedStore(store) {
+  try {
+    localStorage.setItem(SHOPPING_CHECKED_STORAGE_KEY, JSON.stringify(store));
+  } catch (e) {
+    // stockage indisponible (navigation privée, quota...) : tant pis, la
+    // case restera juste non persistée pour cette session.
+  }
+}
+
+function getShoppingPeriodKey(view, dates) {
+  const first = dates[0];
+  if (view === "month") {
+    return `month-${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, "0")}`;
+  }
+  return `week-${gardeDateKey(first)}`;
 }
 
 // Construit la liste de courses à partir des menus programmés sur les
