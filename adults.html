@@ -713,6 +713,18 @@ let repasWeekOffset = 0;
     let repasView = "week"; // "week" | "month"
     let repasSubview = "planning"; // "planning" | "shopping" | "recettes"
     let repasPickerContext = null; // { dateKey, slot } en cours d'édition
+    let repasDataLoaded = false;
+
+    // Recettes/ingrédients ne sont chargés qu'à la première ouverture de
+    // l'onglet Repas (voir loadRepasData dans shared.js), pas à chaque
+    // ouverture de l'appli — corvées/récompenses/planning garde redeviennent
+    // ainsi rapides à charger.
+    async function ensureRepasDataLoaded() {
+      if (repasDataLoaded) return;
+      repasDataLoaded = true;
+      await loadRepasData();
+      renderRepasTab();
+    }
 
     // Sous-navigation Planning / Courses / Recettes : sur mobile, tout afficher
     // en une seule page (planning + courses + 68 recettes) était illisible,
@@ -751,7 +763,7 @@ let repasWeekOffset = 0;
         refreshBtn.addEventListener("click", async () => {
           refreshBtn.disabled = true;
           refreshBtn.textContent = "Actualisation...";
-          data = await loadAppData();
+          await loadRepasData();
           renderRepasTab();
           refreshBtn.textContent = "🔄 Actualiser";
           refreshBtn.disabled = false;
@@ -2415,7 +2427,7 @@ let repasWeekOffset = 0;
         if (!data.activeAdultId && data.adults && data.adults.length > 0) {
           data.activeAdultId = data.adults[0].id;
         }
-        setupTabs();
+        setupTabs(undefined, tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
         renderChildrenTable();
         renderChildrenDetailPicker();
         renderChildrenDetailSections();
@@ -2432,7 +2444,7 @@ let repasWeekOffset = 0;
         setupAddRewardForm();
       } else {
         data.activeAdultId = session.personId;
-        setupTabs("adultes");
+        setupTabs("adultes", tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
         setupRestrictedView();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
       }

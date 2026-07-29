@@ -1,6 +1,7 @@
 // Config et helpers partagés entre les 3 pages (index, kids, adults).
 const STORAGE_KEY = "corvees-famille-v1";
 const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
+const API_REPAS_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/repas-config";
 const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
 
 // Rend l'appli installable (icône sur l'écran d'accueil) et lui permet de
@@ -176,10 +177,6 @@ async function loadAppData() {
       gardeOverrides: config.gardeOverrides || {},
       gardeBlocks: config.gardeBlocks || [],
       personRoster: config.personRoster || [],
-      recipes: config.recipes || [],
-      mealPlan: config.mealPlan || [],
-      shoppingChecked: config.shoppingChecked || [],
-      recurringIngredients: config.recurringIngredients || [],
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -192,6 +189,33 @@ async function loadAppData() {
   } catch (e) {
     console.warn("API non disponible, utilisation du localStorage/defaultData :", e);
     return { ...defaultData, ...local, offline: true };
+  }
+}
+
+async function fetchRemoteRepasConfig() {
+  const res = await fetch(API_REPAS_URL);
+  if (!res.ok) throw new Error("API repas non disponible");
+  const payload = await res.json();
+  return Array.isArray(payload) ? payload[0] : payload;
+}
+
+// Chargé séparément de loadAppData(), seulement à l'ouverture de l'onglet
+// Repas (ou via son bouton Actualiser) : recettes + ingrédients coûtent à eux
+// seuls la moitié des appels Notion nécessaires (327 ingrédients = 4 pages),
+// donc on évite de payer ce coût à chaque ouverture de l'appli pour les
+// corvées/récompenses/planning garde qui n'en ont pas besoin.
+async function loadRepasData() {
+  try {
+    const config = await fetchRemoteRepasConfig();
+    data.recipes = config.recipes || [];
+    data.mealPlan = config.mealPlan || [];
+    data.shoppingChecked = config.shoppingChecked || [];
+    data.recurringIngredients = config.recurringIngredients || [];
+    saveData(data);
+    return true;
+  } catch (e) {
+    console.warn("API repas non disponible :", e);
+    return false;
   }
 }
 
@@ -1441,13 +1465,14 @@ function renderWeeklyRecapTable(containerId, data, people, highlightPersonId) {
 // Câble un jeu d'onglets partagé (.tab-btn / .tab-panel, voir shared.css).
 // defaultTab (ex. "quetes") force l'onglet actif initial ; sinon c'est le
 // premier bouton présent dans le DOM qui est utilisé.
-function setupTabs(defaultTab) {
+function setupTabs(defaultTab, onActivate) {
   const buttons = Array.from(document.querySelectorAll(".tab-btn"));
   const panels = Array.from(document.querySelectorAll(".tab-panel"));
 
   function activate(tabName) {
     buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabName));
     panels.forEach(panel => panel.classList.toggle("active", panel.id === `tab-${tabName}`));
+    if (onActivate) onActivate(tabName);
   }
 
   buttons.forEach(btn => {
