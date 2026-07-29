@@ -683,6 +683,13 @@
         li.appendChild(checkbox);
         li.appendChild(name);
 
+        if (item.count > 1) {
+          const countBadge = document.createElement("span");
+          countBadge.className = "ing-count";
+          countBadge.textContent = `×${item.count}`;
+          li.appendChild(countBadge);
+        }
+
         if (item.inStock > 0) {
           const stockBadge = document.createElement("span");
           stockBadge.className = "ing-stock";

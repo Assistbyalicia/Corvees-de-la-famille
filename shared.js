@@ -900,8 +900,9 @@ function computeShoppingList(recipes, mealPlan, dateKeys) {
       if (!recipe) return;
       (recipe.ingredients || []).forEach(ing => {
         if (!byIngredient[ing.id]) {
-          byIngredient[ing.id] = { ...ing, recipes: [] };
+          byIngredient[ing.id] = { ...ing, recipes: [], count: 0 };
         }
+        byIngredient[ing.id].count += 1;
         if (!byIngredient[ing.id].recipes.includes(recipe.name)) {
           byIngredient[ing.id].recipes.push(recipe.name);
         }
