@@ -345,6 +345,13 @@
     </div>
 
     <div class="tab-panel" id="tab-repas">
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+        <button id="repas-subnav-planning" class="btn-secondary">📅 Planning</button>
+        <button id="repas-subnav-shopping" class="btn-secondary">🛒 Courses</button>
+        <button id="repas-subnav-recettes" class="btn-secondary">📖 Recettes</button>
+      </div>
+
+      <div id="repas-panel-planning">
       <div class="section">
         <h2 id="repas-title">🍽️ Menus de la semaine</h2>
         <p class="small">
@@ -378,13 +385,17 @@
           </div>
         </div>
       </div>
+      </div>
 
+      <div id="repas-panel-shopping" style="display:none;">
       <div class="section">
         <h3 id="repas-shopping-title">🛒 Liste de courses de la semaine</h3>
         <p class="small">Ingrédients des recettes prévues. Coche au fur et à mesure que tu les mets dans le chariot — partagé entre tous les adultes.</p>
         <ul class="list shopping-list" id="repas-shopping-list"></ul>
       </div>
+      </div>
 
+      <div id="repas-panel-recettes" style="display:none;">
       <div class="section">
         <h3>📖 Recettes</h3>
         <p class="small">Ta banque de recettes Notion, consultable directement ici.</p>
@@ -414,6 +425,7 @@
             <button id="recipe-plan-cancel" class="btn-secondary">Annuler</button>
           </div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -689,7 +701,38 @@
 let repasWeekOffset = 0;
     let repasMonthOffset = 0;
     let repasView = "week"; // "week" | "month"
+    let repasSubview = "planning"; // "planning" | "shopping" | "recettes"
     let repasPickerContext = null; // { dateKey, slot } en cours d'édition
+
+    // Sous-navigation Planning / Courses / Recettes : sur mobile, tout afficher
+    // en une seule page (planning + courses + 68 recettes) était illisible,
+    // donc un seul panneau est visible à la fois.
+    function setupRepasSubnav() {
+      const planningBtn = document.getElementById("repas-subnav-planning");
+      const shoppingBtn = document.getElementById("repas-subnav-shopping");
+      const recettesBtn = document.getElementById("repas-subnav-recettes");
+      const planningPanel = document.getElementById("repas-panel-planning");
+      const shoppingPanel = document.getElementById("repas-panel-shopping");
+      const recettesPanel = document.getElementById("repas-panel-recettes");
+      if (!planningBtn || !shoppingBtn || !recettesBtn || !planningPanel || !shoppingPanel || !recettesPanel) return;
+
+      function applySubview() {
+        planningPanel.style.display = repasSubview === "planning" ? "" : "none";
+        shoppingPanel.style.display = repasSubview === "shopping" ? "" : "none";
+        recettesPanel.style.display = repasSubview === "recettes" ? "" : "none";
+        planningBtn.classList.toggle("btn-primary", repasSubview === "planning");
+        planningBtn.classList.toggle("btn-secondary", repasSubview !== "planning");
+        shoppingBtn.classList.toggle("btn-primary", repasSubview === "shopping");
+        shoppingBtn.classList.toggle("btn-secondary", repasSubview !== "shopping");
+        recettesBtn.classList.toggle("btn-primary", repasSubview === "recettes");
+        recettesBtn.classList.toggle("btn-secondary", repasSubview !== "recettes");
+      }
+
+      planningBtn.addEventListener("click", () => { repasSubview = "planning"; applySubview(); });
+      shoppingBtn.addEventListener("click", () => { repasSubview = "shopping"; applySubview(); });
+      recettesBtn.addEventListener("click", () => { repasSubview = "recettes"; applySubview(); });
+      applySubview();
+    }
 
     function renderRepasTab() {
       const weekContainer = document.getElementById("repas-grid");
@@ -2301,6 +2344,7 @@ let repasWeekOffset = 0;
       setupMealPicker();
       setupRepasNav();
       setupRecipePlanPicker();
+      setupRepasSubnav();
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);

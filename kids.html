@@ -170,6 +170,12 @@
   </div>
 
   <div class="tab-panel" id="tab-repas">
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+      <button id="repas-subnav-planning-kids" class="btn-secondary">📅 Planning</button>
+      <button id="repas-subnav-recettes-kids" class="btn-secondary">📖 Recettes</button>
+    </div>
+
+    <div id="repas-panel-planning-kids">
     <div class="section">
       <h2 id="repas-title-kids">🍽️ On mange quoi ?</h2>
       <p class="small">Le menu de la semaine, décidé par les adultes.</p>
@@ -185,7 +191,9 @@
       <div id="repas-grid-kids"></div>
       <div id="repas-grid-month-kids" style="display:none;"></div>
     </div>
+    </div>
 
+    <div id="repas-panel-recettes-kids" style="display:none;">
     <div class="section">
       <h3>📖 Recettes</h3>
       <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
@@ -199,6 +207,7 @@
         ✅ Faisable maintenant uniquement (tout est déjà en stock)
       </label>
       <div id="recettes-list-kids"></div>
+    </div>
     </div>
   </div>
 
@@ -464,6 +473,28 @@
     let repasWeekOffsetKids = 0;
     let repasMonthOffsetKids = 0;
     let repasViewKids = "week"; // "week" | "month"
+    let repasSubviewKids = "planning"; // "planning" | "recettes"
+
+    function setupRepasSubnavKids() {
+      const planningBtn = document.getElementById("repas-subnav-planning-kids");
+      const recettesBtn = document.getElementById("repas-subnav-recettes-kids");
+      const planningPanel = document.getElementById("repas-panel-planning-kids");
+      const recettesPanel = document.getElementById("repas-panel-recettes-kids");
+      if (!planningBtn || !recettesBtn || !planningPanel || !recettesPanel) return;
+
+      function applySubview() {
+        planningPanel.style.display = repasSubviewKids === "planning" ? "" : "none";
+        recettesPanel.style.display = repasSubviewKids === "recettes" ? "" : "none";
+        planningBtn.classList.toggle("btn-primary", repasSubviewKids === "planning");
+        planningBtn.classList.toggle("btn-secondary", repasSubviewKids !== "planning");
+        recettesBtn.classList.toggle("btn-primary", repasSubviewKids === "recettes");
+        recettesBtn.classList.toggle("btn-secondary", repasSubviewKids !== "recettes");
+      }
+
+      planningBtn.addEventListener("click", () => { repasSubviewKids = "planning"; applySubview(); });
+      recettesBtn.addEventListener("click", () => { repasSubviewKids = "recettes"; applySubview(); });
+      applySubview();
+    }
 
     function renderRepasKids() {
       const weekContainer = document.getElementById("repas-grid-kids");
@@ -797,6 +828,7 @@
       renderOfflineBadge(data);
       setupGardeNavKids();
       setupRepasNavKids();
+      setupRepasSubnavKids();
       renderAll();
       renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);
       setupTabs("quetes");

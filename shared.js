@@ -866,6 +866,7 @@ function findRecipeById(recipes, recipeId) {
 // lecture seule (vue enfant).
 function renderMealPlanWeek(container, recipes, mealPlan, weekOffset, onCellClick) {
   container.innerHTML = "";
+  container.style.overflowX = "auto";
 
   const dates = getWeekDates(weekOffset || 0);
   const today = new Date();

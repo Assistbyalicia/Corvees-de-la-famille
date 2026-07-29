@@ -381,9 +381,9 @@ tfoot td {
 
 .meal-grid {
   display: grid;
-  grid-template-columns: 90px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 70px repeat(7, minmax(78px, 1fr));
+  min-width: 646px;
   gap: 6px;
-  overflow-x: auto;
 }
 .meal-day-header {
   text-align: center;
