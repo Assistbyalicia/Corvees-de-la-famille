@@ -93,6 +93,7 @@ const defaultData = {
   mealPlan: [],
   shoppingChecked: [],
   recurringIngredients: [],
+  pendingActions: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -236,42 +237,92 @@ async function loadRepasData() {
   }
 }
 
-// --- Indicateur de synchronisation ---------------------------------------
+// --- Indicateur de synchronisation + file d'attente / réessai -----------
 // fetch() ne rejette que sur une coupure réseau franche, jamais sur une
 // réponse HTTP d'erreur : sans vérifier res.ok, une action pouvait échouer
 // côté serveur sans que personne ne le sache jamais (juste un console.warn
 // invisible). postToServer() centralise l'écriture vers n8n pour toutes les
-// actions et lève un indicateur partagé en cas d'échec (réseau OU HTTP),
-// que renderSyncWarningBadge() affiche/masque sur chaque page.
-let syncFailed = false;
+// actions ; en cas d'échec (réseau OU HTTP), l'action est mise en attente
+// dans data.pendingActions (persisté en localStorage, donc ça survit à un
+// rechargement) et réessayée automatiquement — au retour du réseau, et en
+// secours toutes les 30s. renderSyncWarningBadge() affiche le nombre
+// d'actions en attente tant que la file n'est pas vide.
 const syncStatusListeners = [];
 
 function onSyncStatusChange(callback) {
   syncStatusListeners.push(callback);
 }
 
-function setSyncFailed(failed) {
-  if (syncFailed === failed) return;
-  syncFailed = failed;
-  syncStatusListeners.forEach(cb => cb(failed));
+function notifySyncStatus() {
+  const count = (data && Array.isArray(data.pendingActions)) ? data.pendingActions.length : 0;
+  syncStatusListeners.forEach(cb => cb(count));
 }
 
-async function postToServer(body) {
+function enqueuePendingAction(body) {
+  if (!data.pendingActions) data.pendingActions = [];
+  data.pendingActions.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    body
+  });
+  saveData(data);
+  notifySyncStatus();
+}
+
+function dequeuePendingAction(id) {
+  if (!data || !Array.isArray(data.pendingActions)) return;
+  data.pendingActions = data.pendingActions.filter(item => item.id !== id);
+  saveData(data);
+}
+
+async function sendOnce(body) {
   try {
     const res = await fetch(API_COMPLETE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    setSyncFailed(false);
-    return true;
+    return res.ok;
   } catch (e) {
-    console.warn(`Action "${body.action}" non synchronisée avec Notion :`, e);
-    setSyncFailed(true);
     return false;
   }
 }
+
+async function postToServer(body) {
+  const ok = await sendOnce(body);
+  if (ok) {
+    notifySyncStatus();
+    return true;
+  }
+  console.warn(`Action "${body.action}" non synchronisée, mise en attente pour réessai :`, body);
+  enqueuePendingAction(body);
+  return false;
+}
+
+// Rejoue les actions en attente dans leur ordre d'échec, et s'arrête au
+// premier nouvel échec — pour ne pas rejouer les suivantes dans le désordre
+// si le réseau est encore capricieux, elles seront retentées au prochain
+// passage.
+let retryInFlight = false;
+async function retryPendingActions() {
+  if (retryInFlight || !data || !Array.isArray(data.pendingActions) || data.pendingActions.length === 0) {
+    return;
+  }
+  retryInFlight = true;
+  try {
+    while (data.pendingActions.length > 0) {
+      const next = data.pendingActions[0];
+      const ok = await sendOnce(next.body);
+      if (!ok) break;
+      dequeuePendingAction(next.id);
+    }
+  } finally {
+    retryInFlight = false;
+    notifySyncStatus();
+  }
+}
+
+window.addEventListener("online", retryPendingActions);
+setInterval(retryPendingActions, 30000);
 
 // action: "complete" | "cancel" — un seul webhook, N8N distingue via le champ "action".
 async function postChoreAction(personId, choreId, action) {
@@ -1149,7 +1200,13 @@ function computeShoppingList(recipes, mealPlan, dateKeys, recurringIngredients) 
     byIngredient[ing.id].recurring = true;
   });
 
-  return Object.values(byIngredient).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  // "En stock" (même champ que isRecipeMakeable) : déjà à la maison, pas
+  // besoin de le racheter. On n'a pas de quantité par recette (juste des
+  // occurrences), donc "en stock > 0" veut dire "couvert", pas "combien
+  // il en reste à acheter".
+  return Object.values(byIngredient)
+    .filter(ing => !((ing.inStock || 0) > 0))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
 // Petite étoile qui "pop" et s'envole au-dessus de anchorEl (le bouton
@@ -1426,10 +1483,17 @@ function renderOfflineBadge(data) {
 // Affiche/masque un bandeau quand une action (valider une corvée, proposer
 // un repas...) n'a pas pu s'enregistrer sur le serveur — voir postToServer().
 // Branché une fois pour toutes ici : chaque page n'a qu'à ajouter la div.
-function renderSyncWarningBadge(failed) {
+function renderSyncWarningBadge(count) {
   const badge = document.getElementById("sync-warning-badge");
   if (!badge) return;
-  badge.style.display = failed ? "block" : "none";
+  if (count > 0) {
+    badge.style.display = "block";
+    badge.textContent = count === 1
+      ? "⚠️ 1 action en attente de synchronisation. Nouvel essai automatique en cours…"
+      : `⚠️ ${count} actions en attente de synchronisation. Nouvel essai automatique en cours…`;
+  } else {
+    badge.style.display = "none";
+  }
 }
 onSyncStatusChange(renderSyncWarningBadge);
 

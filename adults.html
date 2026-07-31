@@ -2541,6 +2541,8 @@ let repasWeekOffset = 0;
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupAvatarForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupPushNotifications(session.personId);
+      notifySyncStatus();
+      retryPendingActions();
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();

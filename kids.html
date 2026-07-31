@@ -954,6 +954,8 @@
       setupAvatarForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupPushNotifications(data.activeChildId);
       setupProposeRewardForm();
+      notifySyncStatus();
+      retryPendingActions();
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();
