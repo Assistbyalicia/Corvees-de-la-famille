@@ -861,6 +861,25 @@ async function setupPushNotifications(personId) {
   const status = document.getElementById("push-status");
   if (!btn) return;
 
+  // Sur iPhone/iPad, seul Safari a accès aux notifications push pour une PWA,
+  // et seulement une fois l'appli ajoutée à l'écran d'accueil (iOS 16.4+) :
+  // Chrome/Firefox iOS utilisent le même moteur qu'Safari mais Apple leur
+  // bloque cette fonctionnalité. On détecte le cas pour expliquer plutôt que
+  // de laisser échouer avec une erreur générique.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const isSafari = /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(navigator.userAgent);
+
+  if (isIOS && !isStandalone) {
+    btn.disabled = true;
+    if (!isSafari) {
+      status.textContent = "Sur iPhone/iPad, seul Safari permet les notifications (pas Chrome/Firefox). Ouvre ce site avec Safari, puis suis l'étape suivante.";
+    } else {
+      status.textContent = "Ajoute d'abord l'appli à l'écran d'accueil : appuie sur le bouton Partager, puis \"Sur l'écran d'accueil\". Ouvre ensuite l'appli depuis cette icône pour activer les notifications.";
+    }
+    return;
+  }
+
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     btn.disabled = true;
     btn.textContent = "🔔 Non disponible sur ce navigateur";
