@@ -236,40 +236,61 @@ async function loadRepasData() {
   }
 }
 
-// action: "complete" | "cancel" — un seul webhook, N8N distingue via le champ "action".
-async function postChoreAction(personId, choreId, action) {
+// --- Indicateur de synchronisation ---------------------------------------
+// fetch() ne rejette que sur une coupure réseau franche, jamais sur une
+// réponse HTTP d'erreur : sans vérifier res.ok, une action pouvait échouer
+// côté serveur sans que personne ne le sache jamais (juste un console.warn
+// invisible). postToServer() centralise l'écriture vers n8n pour toutes les
+// actions et lève un indicateur partagé en cas d'échec (réseau OU HTTP),
+// que renderSyncWarningBadge() affiche/masque sur chaque page.
+let syncFailed = false;
+const syncStatusListeners = [];
+
+function onSyncStatusChange(callback) {
+  syncStatusListeners.push(callback);
+}
+
+function setSyncFailed(failed) {
+  if (syncFailed === failed) return;
+  syncFailed = failed;
+  syncStatusListeners.forEach(cb => cb(failed));
+}
+
+async function postToServer(body) {
   try {
-    await fetch(API_COMPLETE_URL, {
+    const res = await fetch(API_COMPLETE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    setSyncFailed(false);
+    return true;
+  } catch (e) {
+    console.warn(`Action "${body.action}" non synchronisée avec Notion :`, e);
+    setSyncFailed(true);
+    return false;
+  }
+}
+
+// action: "complete" | "cancel" — un seul webhook, N8N distingue via le champ "action".
+async function postChoreAction(personId, choreId, action) {
+  return postToServer({
         action,
         personId,
         choreId,
         date: getTodayKey()
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de journaliser la corvée dans Notion :", e);
-  }
+      });
 }
 
 // action: "purchase" pour l'instant.
 async function postRewardAction(personId, rewardId, action) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action,
         personId,
         rewardId,
         date: getTodayKey()
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de journaliser la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "add_chore" — crée la corvée dans Notion pour qu'elle soit reconnue
@@ -278,11 +299,7 @@ async function postRewardAction(personId, rewardId, action) {
 // frequency: "quotidien" (défaut) | "hebdomadaire" | "ponctuel" ; weeklyDays
 // (tableau de jours, 0=dimanche...6=samedi) n'est utile que pour "hebdomadaire".
 async function postAddChore(choreId, label, stars, personIds, frequency, weeklyDays) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "add_chore",
         choreId,
         label,
@@ -290,246 +307,138 @@ async function postAddChore(choreId, label, stars, personIds, frequency, weeklyD
         personIds,
         frequency,
         weeklyDays
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de créer la corvée dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_chore_frequency" — change la fréquence (et les jours, si
 // hebdomadaire) d'une corvée existante.
 async function postUpdateChoreFrequency(choreId, frequency, weeklyDays) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_chore_frequency",
         choreId,
         frequency,
         weeklyDays
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour la fréquence de la corvée dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_chore_details" — change le nom et/ou la valeur en étoiles
 // d'une corvée existante.
 async function postUpdateChoreDetails(choreId, label, stars) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_chore_details",
         choreId,
         label,
         stars
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour la corvée dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_reward_details" — change le nom et/ou le coût d'une
 // récompense existante.
 async function postUpdateRewardDetails(rewardId, label, cost) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_reward_details",
         rewardId,
         label,
         cost
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "add_reward" — crée la récompense dans Notion. personIds est un tableau.
 async function postAddReward(rewardId, label, cost, personIds) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "add_reward",
         rewardId,
         label,
         cost,
         personIds
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de créer la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "propose_reward" — un enfant propose une récompense sans coût ; elle
 // reste "en attente" (reward.pending côté config) jusqu'à ce qu'un adulte lui
 // attribue un coût via postUpdateRewardCost.
 async function postProposeReward(rewardId, label, personId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "propose_reward",
         rewardId,
         label,
         personId
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de proposer la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_reward_cost" — un adulte attribue un coût à une récompense
 // proposée par un enfant, ce qui l'active (elle n'est plus "en attente").
 async function postUpdateRewardCost(rewardId, cost) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_reward_cost",
         rewardId,
         cost
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de valider le coût de la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_chore_assignment" — remplace la liste de personnes assignées
 // à une corvée existante (relation "Assignée à" côté Notion).
 async function postUpdateChoreAssignment(choreId, personIds) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_chore_assignment",
         choreId,
         personIds
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour l'assignation de la corvée dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_reward_assignment" — idem pour une récompense.
 async function postUpdateRewardAssignment(rewardId, personIds) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_reward_assignment",
         rewardId,
         personIds
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour l'assignation de la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "delete_reward" — archive la récompense dans Notion.
 async function postDeleteReward(rewardId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "delete_reward",
         rewardId
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de supprimer la récompense dans Notion :", e);
-  }
+      });
 }
 
 // action: "delete_chore" — archive la corvée dans Notion.
 async function postDeleteChore(choreId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "delete_chore",
         choreId
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de supprimer la corvée dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_pin" — enregistre le nouveau code de la personne dans Notion.
 async function postUpdatePin(personId, newPin) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_pin",
         personId,
         newPin
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour le code dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_security_question" — enregistre la question/réponse secrète
 // de la personne dans Notion (utilisée par le flux "Code oublié ?").
 async function postUpdateSecurityQuestion(personId, question, answer) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_security_question",
         personId,
         question,
         answer
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour la question secrète dans Notion :", e);
-  }
+      });
 }
 
 // action: "update_avatar" — enregistre l'emoji choisi par la personne dans
 // Notion, pour le retrouver sur tous les appareils.
 async function postUpdateAvatar(personId, avatar) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  return postToServer({
         action: "update_avatar",
         personId,
         avatar
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible de mettre à jour l'avatar dans Notion :", e);
-  }
+      });
 }
 
 // Emoji d'une personne, avec un repli neutre si elle n'en a pas encore choisi.
@@ -646,198 +555,86 @@ function getChildGardeLocation(childName, date, overrides, blocks) {
 // action: "set_garde_override" — force manuellement un jour chez un parent
 // (exception au calcul automatique), ex. échange de week-end.
 async function postSetGardeOverride(dateKey, parent) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_garde_override", date: dateKey, parent })
-    });
-  } catch (e) {
-    console.warn("Impossible d'enregistrer l'exception de garde dans Notion :", e);
-  }
+  return postToServer({ action: "set_garde_override", date: dateKey, parent });
 }
 
 // action: "clear_garde_override" — retire une exception posée à la main,
 // pour revenir au calcul automatique sur ce jour.
 async function postClearGardeOverride(dateKey) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "clear_garde_override", date: dateKey })
-    });
-  } catch (e) {
-    console.warn("Impossible de réinitialiser l'exception de garde dans Notion :", e);
-  }
+  return postToServer({ action: "clear_garde_override", date: dateKey });
 }
 
 // action: "add_garde_block" — ajoute un bloc de vacances (petites ou
 // grandes) dans Notion, pour que l'admin configure les dates de garde
 // depuis l'appli sans passer par du code.
 async function postAddGardeBlock(label, start, end, parent) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add_garde_block", label, start, end, parent })
-    });
-  } catch (e) {
-    console.warn("Impossible d'ajouter le bloc de vacances dans Notion :", e);
-  }
+  return postToServer({ action: "add_garde_block", label, start, end, parent });
 }
 
 // action: "delete_garde_block" — supprime un bloc de vacances.
 async function postDeleteGardeBlock(blockId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete_garde_block", blockId })
-    });
-  } catch (e) {
-    console.warn("Impossible de supprimer le bloc de vacances dans Notion :", e);
-  }
+  return postToServer({ action: "delete_garde_block", blockId });
 }
 
 // action: "update_garde_block" — modifie un bloc de vacances existant
 // (nom, dates, parent) directement depuis l'appli.
 async function postUpdateGardeBlock(blockId, label, start, end, parent) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update_garde_block", blockId, label, start, end, parent })
-    });
-  } catch (e) {
-    console.warn("Impossible de modifier le bloc de vacances dans Notion :", e);
-  }
+  return postToServer({ action: "update_garde_block", blockId, label, start, end, parent });
 }
 
 // action: "add_person" — crée un enfant ou un adulte dans Notion, pour
 // gérer la famille depuis l'appli sans passer par Notion directement.
 async function postAddPerson(name, type, code) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add_person", name, type, code })
-    });
-  } catch (e) {
-    console.warn("Impossible d'ajouter la personne dans Notion :", e);
-  }
+  return postToServer({ action: "add_person", name, type, code });
 }
 
 // action: "toggle_person_active" — active/désactive une personne (jamais
 // de suppression pure, pour ne pas casser les historiques qui la
 // référencent encore).
 async function postTogglePersonActive(personId, active) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggle_person_active", personId, active })
-    });
-  } catch (e) {
-    console.warn("Impossible de changer le statut de la personne dans Notion :", e);
-  }
+  return postToServer({ action: "toggle_person_active", personId, active });
 }
 
 // action: "set_meal_plan" — assigne (ou remplace) la recette prévue pour un
 // jour + créneau (midi/soir) donné. La recette elle-même reste gérée dans
 // Notion (BDD RECETTES) : ici on choisit juste laquelle est prévue quand.
 async function postSetMealPlan(dateKey, slot, recipeId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_meal_plan", date: dateKey, slot, recipeId })
-    });
-  } catch (e) {
-    console.warn("Impossible d'enregistrer le menu dans Notion :", e);
-  }
+  return postToServer({ action: "set_meal_plan", date: dateKey, slot, recipeId });
 }
 
 // action: "clear_meal_plan" — retire la recette prévue pour un jour + créneau.
 async function postClearMealPlan(dateKey, slot) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "clear_meal_plan", date: dateKey, slot })
-    });
-  } catch (e) {
-    console.warn("Impossible de retirer le menu dans Notion :", e);
-  }
+  return postToServer({ action: "clear_meal_plan", date: dateKey, slot });
 }
 
 // action: "propose_meal" — un enfant suggère une recette pour un jour +
 // créneau encore vide ; reste "en attente" (mealPlan[].pending côté config)
 // jusqu'à ce qu'un adulte approuve ou refuse la proposition.
 async function postProposeMeal(dateKey, slot, recipeId, personId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "propose_meal", date: dateKey, slot, recipeId, personId })
-    });
-  } catch (e) {
-    console.warn("Impossible d'enregistrer la proposition de repas dans Notion :", e);
-  }
+  return postToServer({ action: "propose_meal", date: dateKey, slot, recipeId, personId });
 }
 
 // action: "approve_meal_proposal" — un adulte valide la proposition, qui
 // devient un menu confirmé normal.
 async function postApproveMealProposal(dateKey, slot) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "approve_meal_proposal", date: dateKey, slot })
-    });
-  } catch (e) {
-    console.warn("Impossible d'approuver la proposition de repas dans Notion :", e);
-  }
+  return postToServer({ action: "approve_meal_proposal", date: dateKey, slot });
 }
 
 // action: "reject_meal_proposal" — un adulte refuse la proposition, qui est
 // supprimée.
 async function postRejectMealProposal(dateKey, slot) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reject_meal_proposal", date: dateKey, slot })
-    });
-  } catch (e) {
-    console.warn("Impossible de refuser la proposition de repas dans Notion :", e);
-  }
+  return postToServer({ action: "reject_meal_proposal", date: dateKey, slot });
 }
 
 // action: "check_shopping_item" / "uncheck_shopping_item" — coche partagée de
 // la liste de courses (une ligne Notion par ingrédient x période affichée),
 // pour que les cases cochées soient les mêmes sur tous les appareils.
 async function postCheckShoppingItem(periodKey, ingredientId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "check_shopping_item", periodKey, ingredientId })
-    });
-  } catch (e) {
-    console.warn("Impossible de cocher l'ingrédient dans Notion :", e);
-  }
+  return postToServer({ action: "check_shopping_item", periodKey, ingredientId });
 }
 
 async function postUncheckShoppingItem(periodKey, ingredientId) {
-  try {
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "uncheck_shopping_item", periodKey, ingredientId })
-    });
-  } catch (e) {
-    console.warn("Impossible de décocher l'ingrédient dans Notion :", e);
-  }
+  return postToServer({ action: "uncheck_shopping_item", periodKey, ingredientId });
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -850,22 +647,14 @@ function urlBase64ToUint8Array(base64String) {
 // action: "save_push_subscription" — enregistre (ou met à jour) l'abonnement
 // aux notifications push de cet appareil pour cette personne.
 async function postSavePushSubscription(personId, subscription) {
-  try {
-    const json = subscription.toJSON();
-    await fetch(API_COMPLETE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "save_push_subscription",
-        personId,
-        endpoint: json.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth
-      })
-    });
-  } catch (e) {
-    console.warn("Impossible d'enregistrer l'abonnement notifications :", e);
-  }
+  const json = subscription.toJSON();
+  return postToServer({
+    action: "save_push_subscription",
+    personId,
+    endpoint: json.endpoint,
+    p256dh: json.keys.p256dh,
+    auth: json.keys.auth
+  });
 }
 
 // Branche le bouton "🔔 Activer les notifications" partagé (id: enable-push-btn
@@ -1633,6 +1422,16 @@ function renderOfflineBadge(data) {
   if (!badge) return;
   badge.style.display = data.offline ? "block" : "none";
 }
+
+// Affiche/masque un bandeau quand une action (valider une corvée, proposer
+// un repas...) n'a pas pu s'enregistrer sur le serveur — voir postToServer().
+// Branché une fois pour toutes ici : chaque page n'a qu'à ajouter la div.
+function renderSyncWarningBadge(failed) {
+  const badge = document.getElementById("sync-warning-badge");
+  if (!badge) return;
+  badge.style.display = failed ? "block" : "none";
+}
+onSyncStatusChange(renderSyncWarningBadge);
 
 // Formulaire partagé "Changer mon code" : attend les éléments d'id
 // change-pin-current / change-pin-new / change-pin-confirm / change-pin-btn /
