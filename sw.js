@@ -47,3 +47,26 @@ self.addEventListener("fetch", event => {
       .catch(() => caches.match(event.request))
   );
 });
+
+// Notifications push : envoyées sans contenu (voir n8n), donc le titre/texte
+// affiché est générique ici plutôt que de dépendre d'un payload chiffré.
+self.addEventListener("push", event => {
+  const title = "🏰 Carnet de quêtes";
+  const options = {
+    body: "Nouveauté dans l'appli — viens jeter un œil !",
+    icon: "icons/icon-192.png",
+    badge: "icons/icon-192.png"
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientsArr => {
+      const existing = clientsArr.find(c => c.url.includes(self.location.origin));
+      if (existing) return existing.focus();
+      return self.clients.openWindow("index.html");
+    })
+  );
+});

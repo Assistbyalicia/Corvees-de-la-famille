@@ -445,6 +445,13 @@
 
     <div class="tab-panel" id="tab-compte">
       <div class="section">
+        <h3>🔔 Notifications</h3>
+        <p class="small">Reçois une alerte quand une proposition attend ta validation, ou pour un rappel repas/corvées.</p>
+        <button id="enable-push-btn" class="btn-primary">🔔 Activer les notifications</button>
+        <p id="push-status" class="small"></p>
+      </div>
+
+      <div class="section">
         <h3>Mon avatar</h3>
         <p class="small">Choisis l'emoji qui te représente, il s'affichera partout dans l'appli.</p>
         <p id="avatar-message" style="display:none; color:#c0392b; font-size:0.85rem;"></p>
@@ -2529,6 +2536,7 @@ let repasWeekOffset = 0;
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupAvatarForm(session, [...(data.children || []), ...(data.adults || [])]);
+      setupPushNotifications(session.personId);
 
       document.getElementById("logout-btn").addEventListener("click", () => {
         clearSession();

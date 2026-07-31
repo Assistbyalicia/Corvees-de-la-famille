@@ -3,6 +3,8 @@ const STORAGE_KEY = "corvees-famille-v1";
 const API_CONFIG_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/03ec9874-25e6-483b-8305-4f622e53a24a";
 const API_REPAS_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/repas-config";
 const API_COMPLETE_URL = "https://n8n.srv1105523.hstgr.cloud/webhook/corvees-complete";
+// Clé publique VAPID (pas un secret : c'est la clé privée côté n8n qui protège l'envoi).
+const VAPID_PUBLIC_KEY = "BJ0GA_Ja776Yrp9YdQPTqJX2TvSMxnyntybgAZUzWG6_cUxnJqaPdvmX1I-H5HmUXZQwTyd5MRtGkSvUnILgYbs";
 
 // Rend l'appli installable (icône sur l'écran d'accueil) et lui permet de
 // charger même sans réseau, voir sw.js.
@@ -821,6 +823,92 @@ async function postUncheckShoppingItem(periodKey, ingredientId) {
   } catch (e) {
     console.warn("Impossible de décocher l'ingrédient dans Notion :", e);
   }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// action: "save_push_subscription" — enregistre (ou met à jour) l'abonnement
+// aux notifications push de cet appareil pour cette personne.
+async function postSavePushSubscription(personId, subscription) {
+  try {
+    const json = subscription.toJSON();
+    await fetch(API_COMPLETE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "save_push_subscription",
+        personId,
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth
+      })
+    });
+  } catch (e) {
+    console.warn("Impossible d'enregistrer l'abonnement notifications :", e);
+  }
+}
+
+// Branche le bouton "🔔 Activer les notifications" partagé (id: enable-push-btn
+// + un <p id="push-status">). personId est celui à associer à l'abonnement
+// (session.personId côté adultes, data.activeChildId côté enfants).
+async function setupPushNotifications(personId) {
+  const btn = document.getElementById("enable-push-btn");
+  const status = document.getElementById("push-status");
+  if (!btn) return;
+
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    btn.disabled = true;
+    btn.textContent = "🔔 Non disponible sur ce navigateur";
+    return;
+  }
+
+  async function updateButtonState() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        btn.textContent = "🔔 Notifications activées";
+        btn.disabled = true;
+      } else {
+        btn.textContent = "🔔 Activer les notifications";
+        btn.disabled = false;
+      }
+    } catch (e) {
+      // Pas grave si l'état ne peut pas être vérifié : le bouton reste cliquable.
+    }
+  }
+
+  btn.addEventListener("click", async () => {
+    if (!personId) {
+      if (status) status.textContent = "Sélectionne d'abord ton profil.";
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        if (status) status.textContent = "Notifications refusées dans le navigateur.";
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+      await postSavePushSubscription(personId, subscription);
+      await updateButtonState();
+      if (status) status.textContent = "Notifications activées !";
+    } catch (e) {
+      console.warn("Erreur activation notifications :", e);
+      if (status) status.textContent = "Erreur lors de l'activation des notifications.";
+    }
+  });
+
+  updateButtonState();
 }
 
 // Rendu du calendrier de garde (3 mois, décalables via monthOffset) dans
