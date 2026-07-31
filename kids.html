@@ -194,6 +194,7 @@
       <div class="section" id="repas-propose-picker" style="display:none; margin-top:1rem; background:#FAF9FF;">
         <h3 id="repas-propose-title"></h3>
         <select id="repas-propose-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;"></select>
+        <button id="repas-propose-suggest" class="btn-secondary" style="width:100%; margin-bottom:0.5rem;">🎲 Surprends-moi</button>
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
           <button id="repas-propose-save" class="btn-primary">Proposer</button>
           <button id="repas-propose-cancel" class="btn-secondary">Annuler</button>
@@ -590,7 +591,20 @@
       const select = document.getElementById("repas-propose-select");
       const saveBtn = document.getElementById("repas-propose-save");
       const cancelBtn = document.getElementById("repas-propose-cancel");
-      if (!picker || !select || !saveBtn || !cancelBtn) return;
+      const suggestBtn = document.getElementById("repas-propose-suggest");
+      if (!picker || !select || !saveBtn || !cancelBtn || !suggestBtn) return;
+
+      suggestBtn.addEventListener("click", () => {
+        if (!repasProposeContext) return;
+        const dates = repasViewKids === "week" ? getWeekDates(repasWeekOffsetKids) : getMonthDates(repasMonthOffsetKids);
+        const dateKeys = dates.map(d => gardeDateKey(d));
+        const suggestion = suggestRandomRecipe(data.recipes || [], data.mealPlan || [], dateKeys);
+        if (!suggestion) {
+          alert("Aucune recette disponible pour l'instant.");
+          return;
+        }
+        select.value = suggestion.id;
+      });
 
       saveBtn.addEventListener("click", async () => {
         if (!repasProposeContext || !select.value || !data.activeChildId) return;

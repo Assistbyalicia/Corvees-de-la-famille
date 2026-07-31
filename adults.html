@@ -381,6 +381,7 @@
             </select>
           </div>
           <select id="repas-picker-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;"></select>
+          <button id="repas-picker-suggest" class="btn-secondary" style="width:100%; margin-bottom:0.5rem;">🎲 Je sais pas quoi cuisiner</button>
           <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
             <button id="repas-picker-save" class="btn-primary">Enregistrer</button>
             <button id="repas-picker-clear" class="btn-danger">Retirer</button>
@@ -1062,10 +1063,24 @@ let repasWeekOffset = 0;
       const saveBtn = document.getElementById("repas-picker-save");
       const clearBtn = document.getElementById("repas-picker-clear");
       const cancelBtn = document.getElementById("repas-picker-cancel");
-      if (!picker || !select || !search || !typeFilter || !saveBtn || !clearBtn || !cancelBtn) return;
+      const suggestBtn = document.getElementById("repas-picker-suggest");
+      if (!picker || !select || !search || !typeFilter || !saveBtn || !clearBtn || !cancelBtn || !suggestBtn) return;
 
       search.addEventListener("input", populateMealPickerSelect);
       typeFilter.addEventListener("change", populateMealPickerSelect);
+
+      suggestBtn.addEventListener("click", () => {
+        if (!repasPickerContext) return;
+        const dates = repasView === "week" ? getWeekDates(repasWeekOffset) : getMonthDates(repasMonthOffset);
+        const dateKeys = dates.map(d => gardeDateKey(d));
+        const suggestion = suggestRandomRecipe(data.recipes || [], data.mealPlan || [], dateKeys);
+        if (!suggestion) {
+          alert("Aucune recette disponible pour l'instant.");
+          return;
+        }
+        repasPickerContext.currentRecipeId = suggestion.id;
+        populateMealPickerSelect();
+      });
 
       saveBtn.addEventListener("click", async () => {
         if (!repasPickerContext || !select.value) return;

@@ -1080,6 +1080,27 @@ function isRecipeMakeable(recipe) {
   return ingredients.length > 0 && ingredients.every(ing => (ing.inStock || 0) > 0);
 }
 
+// Suggère une recette au hasard pour "je sais pas quoi cuisiner" : écarte les
+// recettes déjà prévues sur la période affichée (pour varier), en priorité
+// parmi celles faisables avec le stock actuel. Si tout est déjà prévu ou rien
+// n'est faisable, retombe sur un choix élargi plutôt que de ne rien proposer.
+function suggestRandomRecipe(recipes, mealPlan, dateKeys) {
+  const keySet = new Set(dateKeys);
+  const usedRecipeIds = new Set(
+    (mealPlan || [])
+      .filter(m => keySet.has(m.date) && !m.pending)
+      .map(m => m.recipeId)
+  );
+
+  const all = recipes || [];
+  const notUsed = all.filter(r => !usedRecipeIds.has(r.id));
+  const makeableNotUsed = notUsed.filter(isRecipeMakeable);
+
+  const pool = makeableNotUsed.length > 0 ? makeableNotUsed : notUsed.length > 0 ? notUsed : all;
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 // Rend la liste consultable des recettes (fiche par recette : tags, temps,
 // note, lien vers la recette source, ingrédients). filterText optionnel pour
 // filtrer par nom, mealTypeFilter optionnel pour filtrer par "Type de repas",
