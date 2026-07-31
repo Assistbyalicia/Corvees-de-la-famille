@@ -162,7 +162,11 @@ function mergeById(configItems, localItems) {
     // Notion peut aussi l'avoir refusée (donc archivée). On ne la garde en
     // local que le temps d'un premier aller-retour réseau ; passé ce délai,
     // son absence dans la config veut dire "refusée", pas "hors ligne".
-    if (item.pending && item._localCreatedAt) {
+    if (item.pending) {
+      // Fantôme créé avant ce correctif, donc sans horodatage : on ne peut
+      // plus savoir depuis quand il traîne, on considère que le délai de
+      // grâce est de toute façon dépassé.
+      if (!item._localCreatedAt) return false;
       return Date.now() - item._localCreatedAt < PROPOSAL_GHOST_GRACE_MS;
     }
     return true;
