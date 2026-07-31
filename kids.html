@@ -487,6 +487,8 @@
     async function ensureRepasDataLoadedKids() {
       if (repasDataLoadedKids) return;
       repasDataLoadedKids = true;
+      const grid = document.getElementById("repas-grid-kids");
+      if (grid) grid.innerHTML = '<p class="small">Chargement des recettes...</p>';
       await loadRepasData();
       renderRepasKids();
     }
@@ -885,15 +887,9 @@
       renderProposedRewards();
     }
 
-    async function initApp() {
-      session = getSession();
-      if (!session) {
-        window.location.href = "index.html";
-        return;
-      }
-
-      data = await loadAppData();
-
+    // Vérifie qu'un enfant a bien sa place ici (redirige sinon) et lui
+    // assigne un profil actif par défaut. Retourne false si on a redirigé.
+    function applyInitialActiveChild() {
       if (session.isAdmin) {
         if (!data.activeChildId && data.children && data.children.length > 0) {
           data.activeChildId = data.children[0].id;
@@ -903,18 +899,29 @@
         if (!isChild) {
           // Une personne non-enfant (adulte non-admin) n'a rien à faire ici.
           window.location.href = "adults.html";
-          return;
+          return false;
         }
         data.activeChildId = session.personId;
       }
+      return true;
+    }
 
+    // Rendus seuls (sans re-brancher d'écouteurs), appelés une première fois
+    // avec le cache local puis une seconde fois une fois les données fraîches
+    // arrivées du serveur — voir initApp().
+    function refreshRendersKids() {
       renderOfflineBadge(data);
+      renderAll();
+      renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);
+    }
+
+    // Écouteurs branchés une seule fois (sinon un clic déclencherait l'action
+    // plusieurs fois après un rafraîchissement en arrière-plan).
+    function setupOnceKids() {
       setupGardeNavKids();
       setupRepasNavKids();
       setupMealProposePicker();
       setupRepasSubnavKids();
-      renderAll();
-      renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);
       setupTabs("quetes", tabName => { if (tabName === "repas") ensureRepasDataLoadedKids(); });
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
@@ -925,6 +932,40 @@
         clearSession();
         window.location.href = "index.html";
       });
+    }
+
+    async function initApp() {
+      session = getSession();
+      if (!session) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      // Affichage immédiat depuis le cache local (si on en a un) pendant que
+      // les données fraîches se chargent en arrière-plan, plutôt que de
+      // bloquer l'écran sur un chargement réseau à chaque ouverture.
+      const cached = loadData();
+      const hasCachedData = (cached.children || []).length > 0;
+
+      if (hasCachedData) {
+        data = { ...defaultData, ...cached };
+        if (!applyInitialActiveChild()) return;
+        setupOnceKids();
+        refreshRendersKids();
+
+        loadAppData().then(fresh => {
+          const prevActiveChildId = data.activeChildId;
+          data = fresh;
+          if (prevActiveChildId) data.activeChildId = prevActiveChildId;
+          if (!applyInitialActiveChild()) return;
+          refreshRendersKids();
+        });
+      } else {
+        data = await loadAppData();
+        if (!applyInitialActiveChild()) return;
+        setupOnceKids();
+        refreshRendersKids();
+      }
     }
 
     initApp();

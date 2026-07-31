@@ -400,7 +400,10 @@
       <div class="section">
         <h3 id="repas-shopping-title">🛒 Liste de courses de la semaine</h3>
         <p class="small">Ingrédients des recettes prévues. Coche au fur et à mesure que tu les mets dans le chariot — partagé entre tous les adultes. Si quelqu'un d'autre vient de cocher un ingrédient, actualise pour voir ses coches.</p>
-        <button id="repas-refresh-btn" class="btn-secondary" style="margin-bottom:0.75rem;">🔄 Actualiser</button>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+          <button id="repas-refresh-btn" class="btn-secondary">🔄 Actualiser</button>
+          <button id="repas-share-btn" class="btn-secondary">📤 Partager</button>
+        </div>
         <ul class="list shopping-list" id="repas-shopping-list"></ul>
       </div>
       </div>
@@ -722,6 +725,8 @@ let repasWeekOffset = 0;
     async function ensureRepasDataLoaded() {
       if (repasDataLoaded) return;
       repasDataLoaded = true;
+      const grid = document.getElementById("repas-grid");
+      if (grid) grid.innerHTML = '<p class="small">Chargement des recettes...</p>';
       await loadRepasData();
       renderRepasTab();
     }
@@ -768,6 +773,39 @@ let repasWeekOffset = 0;
           refreshBtn.textContent = "🔄 Actualiser";
           refreshBtn.disabled = false;
         });
+      }
+
+      const shareBtn = document.getElementById("repas-share-btn");
+      if (shareBtn) {
+        shareBtn.addEventListener("click", shareShoppingList);
+      }
+    }
+
+    // Partage la liste de courses (non cochée) via le partage natif du
+    // téléphone, avec repli sur le presse-papiers si non disponible —
+    // pratique pour l'emmener au magasin sans l'appli ouverte.
+    async function shareShoppingList() {
+      const dates = repasView === "week" ? getWeekDates(repasWeekOffset) : getMonthDates(repasMonthOffset);
+      const dateKeys = dates.map(d => gardeDateKey(d));
+      const items = computeShoppingList(data.recipes || [], data.mealPlan || [], dateKeys, data.recurringIngredients || []);
+      const periodKey = getShoppingPeriodKey(repasView, dates);
+      const uncheckedItems = items.filter(item => !isIngredientChecked(data.shoppingChecked || [], periodKey, item.id));
+
+      const title = repasView === "week" ? "Liste de courses de la semaine" : "Liste de courses du mois";
+      const lines = uncheckedItems.map(item => `- ${item.name}${item.count > 1 ? ` (x${item.count})` : ""}`);
+      const text = lines.length > 0 ? lines.join("\n") : "Liste de courses vide.";
+
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text });
+        } catch (e) {
+          // Partage annulé par l'utilisateur : rien à faire.
+        }
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        alert("Liste copiée dans le presse-papiers !");
+      } else {
+        alert(text);
       }
     }
 
@@ -2404,30 +2442,31 @@ let repasWeekOffset = 0;
       });
     }
 
-    async function initApp() {
-      session = getSession();
-      if (!session) {
-        window.location.href = "index.html";
-        return;
-      }
-
-      data = await loadAppData();
-
+    // Vérifie qu'un adulte a bien sa place ici (redirige sinon) et lui assigne
+    // un onglet "Adulte actif" par défaut. Retourne false si on a redirigé.
+    function applyInitialActiveAdult() {
       const isAdultPerson = (data.adults || []).some(p => p.id === session.personId);
-
       if (!session.isAdmin && !isAdultPerson) {
         // Un enfant n'a rien à faire dans la vue adultes.
         window.location.href = "kids.html";
-        return;
+        return false;
       }
-
-      renderOfflineBadge(data);
-
       if (session.isAdmin) {
         if (!data.activeAdultId && data.adults && data.adults.length > 0) {
           data.activeAdultId = data.adults[0].id;
         }
-        setupTabs(undefined, tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
+      } else {
+        data.activeAdultId = session.personId;
+      }
+      return true;
+    }
+
+    // Rendus seuls (sans re-brancher d'écouteurs), appelés une première fois
+    // avec le cache local puis une seconde fois une fois les données fraîches
+    // arrivées du serveur — voir initApp().
+    function refreshRenders() {
+      renderOfflineBadge(data);
+      if (session.isAdmin) {
         renderChildrenTable();
         renderChildrenDetailPicker();
         renderChildrenDetailSections();
@@ -2440,26 +2479,33 @@ let repasWeekOffset = 0;
         renderRewardHistory();
         renderCodesList();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])]);
+      } else {
+        renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
+      }
+      renderGardeChildPicker();
+      renderGardeCalendar();
+      renderGardeBlocksAdmin();
+      renderManagePeopleAdmin();
+      renderRepasTab();
+    }
+
+    // Écouteurs branchés une seule fois (sinon un clic déclencherait l'action
+    // plusieurs fois après un rafraîchissement en arrière-plan).
+    function setupOnce() {
+      if (session.isAdmin) {
+        setupTabs(undefined, tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
         setupAddChoreForm();
         setupAddRewardForm();
       } else {
-        data.activeAdultId = session.personId;
         setupTabs("adultes", tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
         setupRestrictedView();
-        renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
       }
 
       setupMobileTabsToggle();
-
-      renderGardeChildPicker();
       setupGardeNav();
-      renderGardeCalendar();
-      renderGardeBlocksAdmin();
       setupAddBlockForm();
-      renderManagePeopleAdmin();
       setupAddPersonForm();
 
-      renderRepasTab();
       setupMealPicker();
       setupRepasNav();
       setupRecipePlanPicker();
@@ -2473,6 +2519,40 @@ let repasWeekOffset = 0;
         clearSession();
         window.location.href = "index.html";
       });
+    }
+
+    async function initApp() {
+      session = getSession();
+      if (!session) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      // Affichage immédiat depuis le cache local (si on en a un) pendant que
+      // les données fraîches se chargent en arrière-plan, plutôt que de
+      // bloquer l'écran sur un chargement réseau à chaque ouverture.
+      const cached = loadData();
+      const hasCachedData = (cached.adults || []).length > 0 || (cached.children || []).length > 0;
+
+      if (hasCachedData) {
+        data = { ...defaultData, ...cached };
+        if (!applyInitialActiveAdult()) return;
+        setupOnce();
+        refreshRenders();
+
+        loadAppData().then(fresh => {
+          const prevActiveAdultId = data.activeAdultId;
+          data = fresh;
+          if (prevActiveAdultId) data.activeAdultId = prevActiveAdultId;
+          if (!applyInitialActiveAdult()) return;
+          refreshRenders();
+        });
+      } else {
+        data = await loadAppData();
+        if (!applyInitialActiveAdult()) return;
+        setupOnce();
+        refreshRenders();
+      }
     }
 
     initApp();
