@@ -882,7 +882,8 @@
           assignedTo: [data.activeChildId],
           pending: true,
           proposedBy: data.activeChildId,
-          _source: "local"
+          _source: "local",
+          _localCreatedAt: Date.now()
         });
 
         saveData(data);

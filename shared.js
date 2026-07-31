@@ -150,12 +150,23 @@ async function fetchRemoteConfig() {
 // avec Notion) sont conservées en plus — les autres, si elles ont disparu de
 // Notion (supprimées là-bas), disparaissent aussi de l'app au lieu de rester
 // en cache indéfiniment dans le localStorage.
+const PROPOSAL_GHOST_GRACE_MS = 10 * 60 * 1000;
+
 function mergeById(configItems, localItems) {
   const list = configItems || [];
   const configIds = new Set(list.map(item => item.id));
-  const localOnly = (localItems || []).filter(
-    item => item._source === "local" && !configIds.has(item.id)
-  );
+  const localOnly = (localItems || []).filter(item => {
+    if (item._source !== "local" || configIds.has(item.id)) return false;
+    // Une proposition (récompense proposée par un enfant, marquée "pending")
+    // absente de la config n'est pas forcément "pas encore synchronisée" :
+    // Notion peut aussi l'avoir refusée (donc archivée). On ne la garde en
+    // local que le temps d'un premier aller-retour réseau ; passé ce délai,
+    // son absence dans la config veut dire "refusée", pas "hors ligne".
+    if (item.pending && item._localCreatedAt) {
+      return Date.now() - item._localCreatedAt < PROPOSAL_GHOST_GRACE_MS;
+    }
+    return true;
+  });
   return [...list, ...localOnly];
 }
 
