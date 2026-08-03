@@ -1456,6 +1456,25 @@ function isChoreVisibleToday(chore) {
   return chore.weeklyDays.includes(new Date().getDay());
 }
 
+// Corvées dues aujourd'hui pour un enfant précis : fréquence + assignation,
+// et — si la corvée est limitée à une maison (chore.homeParent, ex. "sortir
+// la poubelle" uniquement chez Papa) — uniquement si l'enfant y est
+// aujourd'hui d'après le planning de garde. Sans homeParent, la corvée
+// s'applique partout comme avant (comportement inchangé).
+function getChildChoresToday(chores, childId, childName, gardeOverrides, gardeBlocks) {
+  return (chores || []).filter(chore => {
+    if (!isChoreVisibleToday(chore)) return false;
+    if (chore.assignedTo && chore.assignedTo.length > 0 && !chore.assignedTo.includes(childId)) {
+      return false;
+    }
+    if (chore.homeParent) {
+      const loc = getChildGardeLocation(childName, new Date(), gardeOverrides || {}, gardeBlocks || []);
+      if (loc.parent !== chore.homeParent) return false;
+    }
+    return true;
+  });
+}
+
 const WEEKLY_RECAP_WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 
 function formatWeeklyRecapDay(dateStr) {

@@ -334,11 +334,14 @@
       }
 
       const childState = getPersonDayState(data.activeChildId);
-      const choresForChild = (data.chores || []).filter(chore => {
-        if (!isChoreVisibleToday(chore)) return false;
-        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-        return chore.assignedTo.includes(data.activeChildId);
-      });
+      const activeChild = (data.children || []).find(c => c.id === data.activeChildId);
+      const choresForChild = getChildChoresToday(
+        data.chores,
+        data.activeChildId,
+        activeChild ? activeChild.name : null,
+        data.gardeOverrides,
+        data.gardeBlocks
+      );
 
       const total = choresForChild.length;
       const completed = childState.completedChores.filter(id =>
@@ -360,11 +363,14 @@
       }
 
       const childState = getPersonDayState(data.activeChildId);
-      const choresForChild = (data.chores || []).filter(chore => {
-        if (!isChoreVisibleToday(chore)) return false;
-        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-        return chore.assignedTo.includes(data.activeChildId);
-      });
+      const activeChild = (data.children || []).find(c => c.id === data.activeChildId);
+      const choresForChild = getChildChoresToday(
+        data.chores,
+        data.activeChildId,
+        activeChild ? activeChild.name : null,
+        data.gardeOverrides,
+        data.gardeBlocks
+      );
 
       const remaining = choresForChild.filter(
         chore => !childState.completedChores.includes(chore.id)
@@ -732,12 +738,14 @@
       }
 
       const childState = getPersonDayState(data.activeChildId);
-
-      const choresForChild = (data.chores || []).filter(chore => {
-        if (!isChoreVisibleToday(chore)) return false;
-        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-        return chore.assignedTo.includes(data.activeChildId);
-      });
+      const activeChild = (data.children || []).find(c => c.id === data.activeChildId);
+      const choresForChild = getChildChoresToday(
+        data.chores,
+        data.activeChildId,
+        activeChild ? activeChild.name : null,
+        data.gardeOverrides,
+        data.gardeBlocks
+      );
 
       choresForChild.forEach(chore => {
         const li = document.createElement("li");

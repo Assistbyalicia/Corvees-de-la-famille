@@ -545,19 +545,32 @@
       if (!tbody) return;
       tbody.innerHTML = "";
 
-      (data.children || []).forEach(child => {
+      const rows = (data.children || []).map(child => {
         const state = getPersonDayState(child.id);
-
-        const choresForChild = (data.chores || []).filter(chore => {
-          if (!isChoreVisibleToday(chore)) return false;
-          if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-          return chore.assignedTo.includes(child.id);
-        });
-
+        const choresForChild = getChildChoresToday(
+          data.chores,
+          child.id,
+          child.name,
+          data.gardeOverrides,
+          data.gardeBlocks
+        );
         const total = choresForChild.length;
         const completed = state.completedChores.filter(id =>
           choresForChild.some(chore => chore.id === id)
         ).length;
+        return { child, state, total, completed };
+      });
+
+      // Repère de charge : si l'écart entre l'enfant le plus et le moins
+      // chargé aujourd'hui est net (≥2 corvées), on le signale — pour
+      // repérer un déséquilibre d'assignation sans avoir à comparer les
+      // chiffres colonne par colonne.
+      const totals = rows.map(r => r.total);
+      const maxTotal = totals.length ? Math.max(...totals) : 0;
+      const minTotal = totals.length ? Math.min(...totals) : 0;
+      const showImbalance = rows.length > 1 && maxTotal - minTotal >= 2;
+
+      rows.forEach(({ child, state, total, completed }) => {
         const ratio = total === 0 ? 0 : Math.round((completed / total) * 100);
 
         const tr = document.createElement("tr");
@@ -570,6 +583,12 @@
 
         const tdTotal = document.createElement("td");
         tdTotal.textContent = total;
+        if (showImbalance && total === maxTotal) {
+          const flag = document.createElement("span");
+          flag.textContent = " ⚖️";
+          flag.title = "Nettement plus de corvées aujourd'hui que les autres enfants.";
+          tdTotal.appendChild(flag);
+        }
 
         const tdRatio = document.createElement("td");
         tdRatio.textContent = `${ratio}%`;
@@ -1469,11 +1488,13 @@ let repasWeekOffset = 0;
       container.appendChild(chartContainer);
       renderStarsChart(chartContainer, data.choreHistory || [], child.id);
 
-      const choresForChild = (data.chores || []).filter(chore => {
-        if (!isChoreVisibleToday(chore)) return false;
-        if (!chore.assignedTo || chore.assignedTo.length === 0) return true;
-        return chore.assignedTo.includes(child.id);
-      });
+      const choresForChild = getChildChoresToday(
+        data.chores,
+        child.id,
+        child.name,
+        data.gardeOverrides,
+        data.gardeBlocks
+      );
 
       const list = document.createElement("ul");
       list.className = "list";
