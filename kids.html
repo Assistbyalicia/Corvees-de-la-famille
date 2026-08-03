@@ -226,6 +226,10 @@
         <input id="recettes-only-makeable-kids" type="checkbox" />
         ✅ Faisable maintenant uniquement (tout est déjà en stock)
       </label>
+      <label style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.75rem; font-size:0.9rem;">
+        <input id="recettes-sort-stale-kids" type="checkbox" />
+        🕰️ Les moins faites récemment en premier
+      </label>
       <div id="recettes-list-kids"></div>
     </div>
     </div>
@@ -565,7 +569,17 @@
       const search = document.getElementById("recettes-search-kids");
       const typeFilter = document.getElementById("recettes-type-filter-kids");
       const onlyMakeable = document.getElementById("recettes-only-makeable-kids");
-      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false);
+      const sortStale = document.getElementById("recettes-sort-stale-kids");
+      renderRecipesList(
+        container,
+        data.recipes || [],
+        search ? search.value : "",
+        typeFilter ? typeFilter.value : "",
+        onlyMakeable ? onlyMakeable.checked : false,
+        undefined,
+        data.mealPlan || [],
+        sortStale ? sortStale.checked : false
+      );
     }
 
     // Un enfant peut proposer une recette pour une case encore vide ; ça reste
@@ -693,6 +707,11 @@
       const onlyMakeable = document.getElementById("recettes-only-makeable-kids");
       if (onlyMakeable) {
         onlyMakeable.addEventListener("change", () => renderRecettesListKids());
+      }
+
+      const sortStale = document.getElementById("recettes-sort-stale-kids");
+      if (sortStale) {
+        sortStale.addEventListener("change", () => renderRecettesListKids());
       }
     }
 

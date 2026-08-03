@@ -417,6 +417,10 @@
           <input id="recettes-only-makeable" type="checkbox" />
           ✅ Faisable maintenant uniquement (tout est déjà en stock)
         </label>
+        <label style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.75rem; font-size:0.9rem;">
+          <input id="recettes-sort-stale" type="checkbox" />
+          🕰️ Les moins faites récemment en premier
+        </label>
         <div id="recettes-list"></div>
 
         <div class="section" id="recipe-plan-picker" style="display:none; margin-top:1rem; background:#FAF9FF;">
@@ -1239,6 +1243,11 @@ let repasWeekOffset = 0;
       if (onlyMakeable) {
         onlyMakeable.addEventListener("change", () => renderRecettesListSection());
       }
+
+      const sortStale = document.getElementById("recettes-sort-stale");
+      if (sortStale) {
+        sortStale.addEventListener("change", () => renderRecettesListSection());
+      }
     }
 
     function renderRecettesListSection() {
@@ -1247,7 +1256,17 @@ let repasWeekOffset = 0;
       const search = document.getElementById("recettes-search");
       const typeFilter = document.getElementById("recettes-type-filter");
       const onlyMakeable = document.getElementById("recettes-only-makeable");
-      renderRecipesList(container, data.recipes || [], search ? search.value : "", typeFilter ? typeFilter.value : "", onlyMakeable ? onlyMakeable.checked : false, openRecipePlanPicker);
+      const sortStale = document.getElementById("recettes-sort-stale");
+      renderRecipesList(
+        container,
+        data.recipes || [],
+        search ? search.value : "",
+        typeFilter ? typeFilter.value : "",
+        onlyMakeable ? onlyMakeable.checked : false,
+        openRecipePlanPicker,
+        data.mealPlan || [],
+        sortStale ? sortStale.checked : false
+      );
     }
 
     // Gestion des blocs de vacances (admin uniquement) : ajout/suppression

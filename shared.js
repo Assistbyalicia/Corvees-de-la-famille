@@ -1069,16 +1069,45 @@ function suggestRandomRecipe(recipes, mealPlan, dateKeys) {
 // onlyMakeable optionnel pour ne garder que les recettes faisables avec le
 // stock actuel, onPlanClick(recipe) optionnel pour afficher un bouton
 // "Planifier" (vue adulte éditable) — omis pour la vue lecture seule.
-function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyMakeable, onPlanClick) {
+// Dernière date (YYYY-MM-DD, passée ou aujourd'hui, hors propositions en
+// attente) à laquelle chaque recette a été programmée dans le planning —
+// contrairement au champ Notion "Dernière fois" (texte libre saisi à la
+// main, donc pas fiable pour trier), c'est calculé à partir de mealPlan,
+// que l'appli a déjà. undefined si la recette n'a jamais été planifiée.
+function computeLastPlannedByRecipeId(mealPlan) {
+  const todayKey = getTodayKey();
+  const result = {};
+  (mealPlan || []).forEach(entry => {
+    if (entry.pending || entry.date > todayKey) return;
+    if (!result[entry.recipeId] || entry.date > result[entry.recipeId]) {
+      result[entry.recipeId] = entry.date;
+    }
+  });
+  return result;
+}
+
+function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyMakeable, onPlanClick, mealPlan, sortStale) {
   container.innerHTML = "";
 
+  const lastPlannedByRecipeId = computeLastPlannedByRecipeId(mealPlan);
+
   const needle = (filterText || "").trim().toLowerCase();
-  const filtered = (recipes || []).filter(r => {
+  let filtered = (recipes || []).filter(r => {
     if (needle && !r.name.toLowerCase().includes(needle)) return false;
     if (mealTypeFilter && !(r.mealTypes || []).includes(mealTypeFilter)) return false;
     if (onlyMakeable && !isRecipeMakeable(r)) return false;
     return true;
   });
+
+  if (sortStale) {
+    // Jamais planifiée d'abord, puis la moins récente en premier.
+    filtered = [...filtered].sort((a, b) => {
+      const da = lastPlannedByRecipeId[a.id] || "";
+      const db = lastPlannedByRecipeId[b.id] || "";
+      if (da === db) return a.name.localeCompare(b.name, "fr");
+      return da < db ? -1 : 1;
+    });
+  }
 
   if (filtered.length === 0) {
     const empty = document.createElement("p");
@@ -1100,6 +1129,21 @@ function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyM
       badge.className = "recipe-makeable-badge";
       badge.textContent = "✅ Faisable maintenant";
       name.appendChild(badge);
+    }
+    const lastPlanned = lastPlannedByRecipeId[recipe.id];
+    if (!lastPlanned) {
+      const staleBadge = document.createElement("span");
+      staleBadge.className = "recipe-stale-badge";
+      staleBadge.textContent = "🕰️ Jamais planifiée";
+      name.appendChild(staleBadge);
+    } else {
+      const daysSince = Math.round((new Date(getTodayKey()) - new Date(lastPlanned)) / 86400000);
+      if (daysSince >= 60) {
+        const staleBadge = document.createElement("span");
+        staleBadge.className = "recipe-stale-badge";
+        staleBadge.textContent = "🕰️ Pas prévue depuis longtemps";
+        name.appendChild(staleBadge);
+      }
     }
     card.appendChild(name);
 
