@@ -499,6 +499,14 @@ tfoot td {
   padding: 0.6rem 0.75rem;
   margin-bottom: 0.5rem;
 }
+.recipe-photo {
+  display: block;
+  width: calc(100% + 1.5rem);
+  height: 140px;
+  object-fit: cover;
+  margin: -0.6rem -0.75rem 0.5rem;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
 .recipe-name {
   font-weight: 700;
   font-size: 0.95rem;

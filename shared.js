@@ -1174,6 +1174,15 @@ function renderRecipesList(container, recipes, filterText, mealTypeFilter, onlyM
     const card = document.createElement("div");
     card.className = "recipe-card";
 
+    if (recipe.photo) {
+      const photo = document.createElement("img");
+      photo.className = "recipe-photo";
+      photo.src = recipe.photo;
+      photo.alt = "";
+      photo.loading = "lazy";
+      card.appendChild(photo);
+    }
+
     const name = document.createElement("div");
     name.className = "recipe-name";
     name.textContent = recipe.name;
