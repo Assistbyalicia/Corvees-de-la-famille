@@ -216,6 +216,19 @@ select:focus {
   font-size: 0.85rem;
   font-weight: 600;
 }
+.push-reminder-banner {
+  background: #F0EDFE;
+  color: #4B3FA8;
+  border-color: #D9D2FB;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.push-reminder-banner .btn-primary {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.8rem;
+}
 
 table {
   width: 100%;
@@ -591,6 +604,20 @@ tfoot td {
   color: #8A5A00;
   font-weight: 700;
 }
+.shopping-list .shopping-category-header {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  background: #F3F0FD;
+  border-radius: var(--radius-md);
+  border-bottom: none;
+  margin-top: 0.4rem;
+}
+.shopping-list .shopping-category-header:first-child {
+  margin-top: 0;
+}
 
 /* Étoile qui "pop" brièvement quand une corvée est validée. */
 @keyframes star-pop-float {
@@ -679,5 +706,13 @@ tfoot td {
     background: #3B2F1A;
     color: #F5D492;
     border-color: #5A4726;
+  }
+  .push-reminder-banner {
+    background: #2A2540;
+    color: #C9BFFC;
+    border-color: #453C6B;
+  }
+  .shopping-list .shopping-category-header {
+    background: #29243a;
   }
 }

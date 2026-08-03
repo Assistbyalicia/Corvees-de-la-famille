@@ -758,31 +758,84 @@ async function setupPushNotifications(personId) {
   }
 
   btn.addEventListener("click", async () => {
-    if (!personId) {
-      if (status) status.textContent = "Sélectionne d'abord ton profil.";
-      return;
-    }
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        if (status) status.textContent = "Notifications refusées dans le navigateur.";
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-      });
-      await postSavePushSubscription(personId, subscription);
-      await updateButtonState();
-      if (status) status.textContent = "Notifications activées !";
-    } catch (e) {
-      console.warn("Erreur activation notifications :", e);
-      if (status) status.textContent = "Erreur lors de l'activation des notifications.";
-    }
+    const result = await requestPushSubscription(personId);
+    if (status) status.textContent = result.message;
+    if (result.success) await updateButtonState();
+    renderPushReminderBadge(personId);
   });
 
   updateButtonState();
+}
+
+// Cœur de l'activation des notifications, partagé entre le bouton de "Mon
+// compte" et le bandeau de rappel (voir renderPushReminderBadge) : demande
+// la permission navigateur, crée l'abonnement push, l'enregistre pour
+// personId. Renvoie un message à afficher plutôt que de toucher le DOM
+// directement, pour que chaque appelant l'affiche à son endroit.
+async function requestPushSubscription(personId) {
+  if (!personId) return { success: false, message: "Sélectionne d'abord ton profil." };
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      return { success: false, message: "Notifications refusées dans le navigateur." };
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    await postSavePushSubscription(personId, subscription);
+    return { success: true, message: "Notifications activées !" };
+  } catch (e) {
+    console.warn("Erreur activation notifications :", e);
+    return { success: false, message: "Erreur lors de l'activation des notifications." };
+  }
+}
+
+// Bandeau discret proposant d'activer les notifications tant que ce n'est
+// pas déjà fait sur cet appareil — sans lui, tout ce qui vient d'être
+// construit (rappels, propositions) ne sert à rien si personne n'a jamais
+// cliqué sur "Activer" dans Mon compte. Ne s'affiche plus après un refus
+// explicite (Notification.permission === "denied"), pour ne pas insister.
+async function renderPushReminderBadge(personId) {
+  const badge = document.getElementById("push-reminder-badge");
+  if (!badge) return;
+  if (!personId || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    badge.style.display = "none";
+    return;
+  }
+  if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+    badge.style.display = "none";
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    badge.style.display = existing ? "none" : "flex";
+  } catch (e) {
+    badge.style.display = "none";
+  }
+}
+
+function setupPushReminderBadge(personId) {
+  const btn = document.getElementById("push-reminder-btn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    await requestPushSubscription(personId);
+    renderPushReminderBadge(personId);
+    // Si le vrai bouton de Mon compte est déjà dans la page (juste dans un
+    // sous-onglet masqué), on le remet à jour aussi pour éviter qu'il
+    // affiche encore "Activer" une fois qu'on y va.
+    const realBtn = document.getElementById("enable-push-btn");
+    if (realBtn) {
+      const reg = await navigator.serviceWorker.ready.catch(() => null);
+      const existing = reg ? await reg.pushManager.getSubscription() : null;
+      if (existing) {
+        realBtn.textContent = "🔔 Notifications activées";
+        realBtn.disabled = true;
+      }
+    }
+  });
 }
 
 // Rendu du calendrier de garde (3 mois, décalables via monthOffset) dans
@@ -1251,6 +1304,42 @@ function computeShoppingList(recipes, mealPlan, dateKeys, recurringIngredients) 
   return Object.values(byIngredient)
     .filter(ing => !((ing.inStock || 0) > 0))
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+}
+
+// Ordre "rayon de magasin" des sous-catégories, repris de celui déjà défini
+// à la main dans Notion (BDD INGREDIENTS > Sous catégorie), pour grouper la
+// liste de courses comme le magasin plutôt que par ordre alphabétique.
+const SHOPPING_CATEGORY_ORDER = [
+  "Fruits & légumes", "Produits laitiers & oeufs", "Céréales", "Viande & poisson",
+  "Pâtes / riz / haricots", "En vrac", "Épices & Herbes", "Pain", "Snacks",
+  "Condiments", "Conserves", "Boissons chaudes", "Surgelé", "Boissons froides",
+  "Réfrigéré", "Pour cuisiner", "Végétarien", "Asiatique", "Animaux de compagnie",
+  "Pharmacie", "Droguerie", "Matériel de ménage", "Papiers", "Epicerie sucrée",
+  "Autres"
+];
+
+// Un ingrédient peut avoir plusieurs sous-catégories (champ multi-select côté
+// Notion) : on ne regroupe que sur la première, pour éviter de le faire
+// apparaître deux fois dans la liste.
+function getShoppingCategoryLabel(item) {
+  return (item.subCategory || [])[0] || "Autres";
+}
+
+// Regroupe une liste déjà triée (computeShoppingList) par rayon, dans
+// l'ordre SHOPPING_CATEGORY_ORDER ; les sous-catégories imprévues (ajoutées
+// dans Notion depuis) atterrissent à la fin plutôt que de disparaître.
+function groupShoppingListByCategory(items) {
+  const groups = {};
+  (items || []).forEach(item => {
+    const cat = getShoppingCategoryLabel(item);
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(item);
+  });
+  const orderedCats = [
+    ...SHOPPING_CATEGORY_ORDER.filter(cat => groups[cat]),
+    ...Object.keys(groups).filter(cat => !SHOPPING_CATEGORY_ORDER.includes(cat))
+  ];
+  return orderedCats.map(cat => ({ category: cat, items: groups[cat] }));
 }
 
 // Petite étoile qui "pop" et s'envole au-dessus de anchorEl (le bouton

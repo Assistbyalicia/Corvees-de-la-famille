@@ -145,6 +145,11 @@
       ⚠️ Mode hors-ligne : impossible de joindre le serveur, les données affichées viennent de cet appareil.
     </div>
 
+    <div id="push-reminder-badge" class="offline-banner push-reminder-banner">
+      <span>🔔 Active les notifications pour être prévenu(e) des propositions et rappels.</span>
+      <button id="push-reminder-btn" class="btn-primary">Activer</button>
+    </div>
+
     <div id="sync-warning-badge" class="offline-banner">
       ⚠️ Une action n'a pas pu être enregistrée sur le serveur. Vérifie ta connexion, puis réessaie.
     </div>
@@ -964,7 +969,7 @@ let repasWeekOffset = 0;
 
       const periodKey = getShoppingPeriodKey(repasView, dates);
 
-      items.forEach(item => {
+      function renderItem(item) {
         const li = document.createElement("li");
         const isChecked = isIngredientChecked(data.shoppingChecked || [], periodKey, item.id);
         if (isChecked) li.classList.add("checked");
@@ -1018,7 +1023,15 @@ let repasWeekOffset = 0;
         meta.textContent = item.recipes.join(", ");
         li.appendChild(meta);
 
-        list.appendChild(li);
+        return li;
+      }
+
+      groupShoppingListByCategory(items).forEach(group => {
+        const header = document.createElement("li");
+        header.className = "shopping-category-header";
+        header.textContent = group.category;
+        list.appendChild(header);
+        group.items.forEach(item => list.appendChild(renderItem(item)));
       });
 
       if (items.length === 0) {
@@ -2592,6 +2605,8 @@ let repasWeekOffset = 0;
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupAvatarForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupPushNotifications(session.personId);
+      setupPushReminderBadge(session.personId);
+      renderPushReminderBadge(session.personId);
       notifySyncStatus();
       retryPendingActions();
 
