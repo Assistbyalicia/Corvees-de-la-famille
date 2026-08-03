@@ -120,10 +120,14 @@
       display: flex;
     }
 
-    body.restricted .tab-btn[data-tab="enfants"],
-    body.restricted .tab-btn[data-tab="corvees"],
-    body.restricted .tab-btn[data-tab="recompenses"],
-    body.restricted .tab-btn[data-tab="codes"] {
+    body.restricted [data-subtab="enfants"],
+    body.restricted [data-subpanel="enfants"],
+    body.restricted [data-subtab="corvees"],
+    body.restricted [data-subpanel="corvees"],
+    body.restricted [data-subtab="recompenses"],
+    body.restricted [data-subpanel="recompenses"],
+    body.restricted [data-subtab="codes"],
+    body.restricted [data-subpanel="codes"] {
       display: none;
     }
   </style>
@@ -154,29 +158,31 @@
 
     <div class="layout-with-sidebar" id="sidebar-layout">
     <button class="tabs-toggle" id="tabs-toggle" type="button">
-      <span id="tabs-toggle-label">Enfants</span>
+      <span id="tabs-toggle-label">👪 Personnes</span>
       <span class="tabs-toggle-arrow">▾</span>
     </button>
     <div class="tabs" id="tabs">
-      <button class="tab-btn" data-tab="enfants" data-label="Enfants">Enfants</button>
-      <button class="tab-btn" data-tab="adultes" data-label="Adultes">Adultes</button>
-      <button class="tab-btn" data-tab="corvees" data-label="Corvées">Corvées</button>
-      <button class="tab-btn" data-tab="recompenses" data-label="Récompenses">
-        Récompenses
-        <span id="recompenses-tab-badge" class="tab-badge" style="display:none;"></span>
+      <button class="tab-btn" data-tab="personnes" data-label="👪 Personnes">👪 Personnes</button>
+      <button class="tab-btn" data-tab="corvees-group" data-label="⭐ Corvées">
+        ⭐ Corvées
+        <span id="corvees-group-tab-badge" class="tab-badge" style="display:none;"></span>
       </button>
-      <button class="tab-btn" data-tab="codes" data-label="Codes">Codes</button>
-      <button class="tab-btn" data-tab="recap" data-label="Récap">Récap</button>
       <button class="tab-btn" data-tab="garde" data-label="🏰 Planning garde">🏰 Planning garde</button>
       <button class="tab-btn" data-tab="repas" data-label="🍽️ Repas">
         🍽️ Repas
         <span id="repas-tab-badge" class="tab-badge" style="display:none;"></span>
       </button>
-      <button class="tab-btn" data-tab="compte" data-label="Mon compte">Mon compte</button>
+      <button class="tab-btn" data-tab="reglages" data-label="⚙️ Réglages">⚙️ Réglages</button>
     </div>
 
     <div class="tab-content">
-    <div class="tab-panel" id="tab-enfants">
+    <div class="tab-panel" id="tab-personnes">
+      <div class="subnav" id="personnes-subnav">
+        <button data-subtab="enfants" class="btn-secondary">Enfants</button>
+        <button data-subtab="adultes" class="btn-secondary">Adultes</button>
+      </div>
+
+      <div data-subpanel="enfants">
       <div class="section">
         <h2>Enfants – tableau de bord</h2>
         <table id="children-table">
@@ -200,18 +206,29 @@
         <div class="people-picker" id="children-detail-picker"></div>
         <div id="children-detail-sections"></div>
       </div>
-    </div>
+      </div>
 
-    <div class="tab-panel" id="tab-adultes">
+      <div data-subpanel="adultes">
       <div class="section">
         <h2>Adultes</h2>
         <p class="small">Adulte actif :</p>
         <div class="people-picker" id="adults-picker"></div>
         <div id="adults-sections"></div>
       </div>
+      </div>
     </div>
 
-    <div class="tab-panel" id="tab-corvees">
+    <div class="tab-panel" id="tab-corvees-group">
+      <div class="subnav" id="corvees-group-subnav">
+        <button data-subtab="corvees" class="btn-secondary">Corvées</button>
+        <button data-subtab="recompenses" class="btn-secondary">
+          Récompenses
+          <span id="recompenses-tab-badge" class="tab-badge" style="display:none;"></span>
+        </button>
+        <button data-subtab="recap" class="btn-secondary">Récap</button>
+      </div>
+
+      <div data-subpanel="corvees">
       <div class="section">
         <h2>Corvées</h2>
         <ul class="list" id="chores-list"></ul>
@@ -238,9 +255,9 @@
         <div class="assign-checkboxes" id="new-chore-people" style="margin-top:0.5rem;"></div>
         <button id="add-chore-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </details>
-    </div>
+      </div>
 
-    <div class="tab-panel" id="tab-recompenses">
+      <div data-subpanel="recompenses">
       <div class="section">
         <h2>Récompenses</h2>
         <ul class="list" id="rewards-list"></ul>
@@ -273,41 +290,14 @@
         <div class="assign-checkboxes" id="new-reward-people" style="margin-top:0.5rem;"></div>
         <button id="add-reward-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </details>
-    </div>
-
-    <div class="tab-panel" id="tab-codes">
-      <div class="section">
-        <h2>Codes d'accès</h2>
-        <p class="small">
-          Consulte ou réinitialise le code de quelqu'un qui l'a oublié.
-        </p>
-        <ul class="list" id="codes-list"></ul>
       </div>
 
-      <details class="section" id="manage-people-admin" style="display:none;">
-        <summary>Gérer les personnes</summary>
-        <p class="small">
-          Désactiver une personne la retire de l'appli sans supprimer son historique (corvées,
-          achats). Tu peux la réactiver à tout moment.
-        </p>
-        <ul class="list" id="people-roster-list"></ul>
-        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem; align-items:center;">
-          <input id="new-person-name" type="text" placeholder="Prénom" style="flex:2; padding:0.25rem;" />
-          <select id="new-person-type" style="padding:0.25rem;">
-            <option value="Enfant">Enfant</option>
-            <option value="Adulte">Adulte</option>
-          </select>
-          <input id="new-person-code" type="text" inputmode="numeric" placeholder="Code (ex. 1234)" style="padding:0.25rem;" />
-        </div>
-        <button id="add-person-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
-      </details>
-    </div>
-
-    <div class="tab-panel" id="tab-recap">
+      <div data-subpanel="recap">
       <div class="section">
         <h2>🏆 Classement de la semaine</h2>
         <p class="small">Total des étoiles gagnées ces 7 derniers jours (enfants et adultes).</p>
         <div id="recap-table"></div>
+      </div>
       </div>
     </div>
 
@@ -447,7 +437,41 @@
       </div>
     </div>
 
-    <div class="tab-panel" id="tab-compte">
+    <div class="tab-panel" id="tab-reglages">
+      <div class="subnav" id="reglages-subnav">
+        <button data-subtab="codes" class="btn-secondary">Codes</button>
+        <button data-subtab="compte" class="btn-secondary">Mon compte</button>
+      </div>
+
+      <div data-subpanel="codes">
+      <div class="section">
+        <h2>Codes d'accès</h2>
+        <p class="small">
+          Consulte ou réinitialise le code de quelqu'un qui l'a oublié.
+        </p>
+        <ul class="list" id="codes-list"></ul>
+      </div>
+
+      <details class="section" id="manage-people-admin" style="display:none;">
+        <summary>Gérer les personnes</summary>
+        <p class="small">
+          Désactiver une personne la retire de l'appli sans supprimer son historique (corvées,
+          achats). Tu peux la réactiver à tout moment.
+        </p>
+        <ul class="list" id="people-roster-list"></ul>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem; align-items:center;">
+          <input id="new-person-name" type="text" placeholder="Prénom" style="flex:2; padding:0.25rem;" />
+          <select id="new-person-type" style="padding:0.25rem;">
+            <option value="Enfant">Enfant</option>
+            <option value="Adulte">Adulte</option>
+          </select>
+          <input id="new-person-code" type="text" inputmode="numeric" placeholder="Code (ex. 1234)" style="padding:0.25rem;" />
+        </div>
+        <button id="add-person-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
+      </details>
+      </div>
+
+      <div data-subpanel="compte">
       <div class="section">
         <h3>🔔 Notifications</h3>
         <p class="small">Reçois une alerte quand une proposition attend ta validation, ou pour un rappel repas/corvées.</p>
@@ -487,6 +511,7 @@
           <input id="security-answer-input" type="text" placeholder="Réponse" style="padding:0.25rem;" />
           <button id="security-question-btn" class="btn-primary">Enregistrer</button>
         </div>
+      </div>
       </div>
     </div>
     </div>
@@ -2060,15 +2085,18 @@ let repasWeekOffset = 0;
 
     function renderPendingRewardsBadge() {
       const badge = document.getElementById("recompenses-tab-badge");
-      if (!badge) return;
-
+      const groupBadge = document.getElementById("corvees-group-tab-badge");
       const count = (data.rewards || []).filter(reward => reward.pending).length;
-      if (count > 0) {
-        badge.textContent = count;
-        badge.style.display = "block";
-      } else {
-        badge.style.display = "none";
-      }
+
+      [badge, groupBadge].forEach(el => {
+        if (!el) return;
+        if (count > 0) {
+          el.textContent = count;
+          el.style.display = "block";
+        } else {
+          el.style.display = "none";
+        }
+      });
     }
 
     function renderProposedRewardsList() {
@@ -2523,9 +2551,13 @@ let repasWeekOffset = 0;
         setupAddChoreForm();
         setupAddRewardForm();
       } else {
-        setupTabs("adultes", tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
+        setupTabs("personnes", tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
         setupRestrictedView();
       }
+
+      setupSubTabs(document.getElementById("tab-personnes"), session.isAdmin ? "enfants" : "adultes");
+      setupSubTabs(document.getElementById("tab-corvees-group"), session.isAdmin ? "corvees" : "recap");
+      setupSubTabs(document.getElementById("tab-reglages"), session.isAdmin ? "codes" : "compte");
 
       setupMobileTabsToggle();
       setupGardeNav();

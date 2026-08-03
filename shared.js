@@ -1473,6 +1473,36 @@ function setupTabs(defaultTab, onActivate) {
   }
 }
 
+// Sous-navigation générique à l'intérieur d'un onglet principal (regroupe
+// plusieurs anciens onglets par thème, ex. Corvées/Récompenses/Récap sous
+// "⭐ Corvées") : même esprit que setupTabs() mais scopée à containerEl via
+// [data-subtab]/[data-subpanel], pour ne pas entrer en collision avec la
+// navigation principale ni avec une autre sous-nav sur la même page.
+function setupSubTabs(containerEl, defaultSub, onActivate) {
+  if (!containerEl) return;
+  const buttons = Array.from(containerEl.querySelectorAll("[data-subtab]"));
+  const panels = Array.from(containerEl.querySelectorAll("[data-subpanel]"));
+  if (buttons.length === 0) return;
+
+  function activate(name) {
+    buttons.forEach(btn => {
+      const isActive = btn.dataset.subtab === name;
+      btn.classList.toggle("btn-primary", isActive);
+      btn.classList.toggle("btn-secondary", !isActive);
+    });
+    panels.forEach(panel => {
+      panel.style.display = panel.dataset.subpanel === name ? "" : "none";
+    });
+    if (onActivate) onActivate(name);
+  }
+
+  buttons.forEach(btn => {
+    btn.addEventListener("click", () => activate(btn.dataset.subtab));
+  });
+
+  activate(defaultSub || buttons[0].dataset.subtab);
+}
+
 // Affiche/masque un bandeau "hors-ligne" si l'API de config n'a pas répondu.
 function renderOfflineBadge(data) {
   const badge = document.getElementById("offline-badge");
