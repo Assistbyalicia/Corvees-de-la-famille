@@ -1456,20 +1456,21 @@ function isChoreVisibleToday(chore) {
   return chore.weeklyDays.includes(new Date().getDay());
 }
 
+// L'appli n'est utilisée que chez Maman : un jour où l'enfant est chez Papa
+// (ou en vacances chez lui), aucune corvée n'a de sens à faire ou rappeler.
+const APP_HOME_PARENT = "maman";
+
 // Corvées dues aujourd'hui pour un enfant précis : fréquence + assignation,
-// et — si la corvée est limitée à une maison (chore.homeParent, ex. "sortir
-// la poubelle" uniquement chez Papa) — uniquement si l'enfant y est
-// aujourd'hui d'après le planning de garde. Sans homeParent, la corvée
-// s'applique partout comme avant (comportement inchangé).
+// et rien du tout si l'enfant n'est pas chez Maman aujourd'hui d'après le
+// planning de garde (voir APP_HOME_PARENT).
 function getChildChoresToday(chores, childId, childName, gardeOverrides, gardeBlocks) {
+  const loc = getChildGardeLocation(childName, new Date(), gardeOverrides || {}, gardeBlocks || []);
+  if (loc.parent && loc.parent !== APP_HOME_PARENT) return [];
+
   return (chores || []).filter(chore => {
     if (!isChoreVisibleToday(chore)) return false;
     if (chore.assignedTo && chore.assignedTo.length > 0 && !chore.assignedTo.includes(childId)) {
       return false;
-    }
-    if (chore.homeParent) {
-      const loc = getChildGardeLocation(childName, new Date(), gardeOverrides || {}, gardeBlocks || []);
-      if (loc.parent !== chore.homeParent) return false;
     }
     return true;
   });
