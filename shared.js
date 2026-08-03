@@ -1351,6 +1351,67 @@ function groupShoppingListByCategory(items) {
   return orderedCats.map(cat => ({ category: cat, items: groups[cat] }));
 }
 
+// Chrono par corvée ("défi chambre", ou juste pour montrer que ça ne prend
+// pas 3h) : purement visuel, rien n'est enregistré. choreTimers reste en
+// mémoire (pas dans data/localStorage) pour survivre à un re-rendu de la
+// liste — l'affichage se met à jour en cherchant l'élément par id à chaque
+// tick plutôt que de garder une référence DOM qu'un re-rendu invaliderait.
+const choreTimers = {};
+
+function formatElapsed(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = String(Math.floor(totalSec / 60)).padStart(2, "0");
+  const s = String(totalSec % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+// Construit le petit widget chrono (affichage + bouton start/stop) pour une
+// corvée donnée, à insérer dans sa ligne. displayId doit être unique par
+// corvée (ex. `chore-timer-${chore.id}`) et stable d'un rendu à l'autre.
+function buildChoreTimerWidget(choreId, displayId) {
+  const wrap = document.createElement("span");
+  wrap.style.display = "inline-flex";
+  wrap.style.alignItems = "center";
+  wrap.style.gap = "0.3rem";
+
+  const display = document.createElement("span");
+  display.id = displayId;
+  display.className = "small";
+  const running = choreTimers[choreId];
+  display.textContent = running ? formatElapsed(Date.now() - running.startTime) : "";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-secondary";
+  btn.textContent = running ? "⏹" : "⏱️";
+
+  btn.addEventListener("click", () => {
+    if (choreTimers[choreId]) {
+      clearInterval(choreTimers[choreId].intervalId);
+      const elapsed = Date.now() - choreTimers[choreId].startTime;
+      delete choreTimers[choreId];
+      btn.textContent = "⏱️";
+      const el = document.getElementById(displayId);
+      if (el) el.textContent = "";
+      if (elapsed >= 2000) alert(`⏱️ Terminé en ${formatElapsed(elapsed)} !`);
+    } else {
+      const startTime = Date.now();
+      choreTimers[choreId] = {
+        startTime,
+        intervalId: setInterval(() => {
+          const el = document.getElementById(displayId);
+          if (el) el.textContent = formatElapsed(Date.now() - startTime);
+        }, 1000)
+      };
+      btn.textContent = "⏹";
+    }
+  });
+
+  wrap.appendChild(display);
+  wrap.appendChild(btn);
+  return wrap;
+}
+
 // Petite étoile qui "pop" et s'envole au-dessus de anchorEl (le bouton
 // "Valider" cliqué), purement décoratif.
 function showStarPop(anchorEl, text) {
