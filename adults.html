@@ -606,7 +606,7 @@
       tbody.innerHTML = "";
 
       const rows = (data.children || []).map(child => {
-        const state = getPersonDayState(child.id);
+        const state = getServerDayState(child.id);
         const choresForChild = getChildChoresToday(
           data.chores,
           child.id,
@@ -1510,7 +1510,7 @@ let repasWeekOffset = 0;
       const child = children.find(c => c.id === activeChildDetailId) || children[0];
       activeChildDetailId = child.id;
 
-      const state = getPersonDayState(child.id);
+      const state = getServerDayState(child.id);
 
       const levelSummary = document.createElement("p");
       levelSummary.className = "small";

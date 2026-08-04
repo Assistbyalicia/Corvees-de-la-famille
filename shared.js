@@ -113,6 +113,7 @@ const defaultData = {
   recurringIngredients: [],
   pendingActions: [],
   photoValidations: [],
+  todayCompletionsByPerson: {},
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -218,6 +219,7 @@ async function loadAppData() {
       gardeOverrides: config.gardeOverrides || {},
       gardeBlocks: config.gardeBlocks || [],
       personRoster: config.personRoster || [],
+      todayCompletionsByPerson: config.todayCompletionsByPerson || {},
       offline: false
     };
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
@@ -417,6 +419,27 @@ function compressImageToBase64(file, maxDimension, quality) {
     img.onerror = reject;
     img.src = objectUrl;
   });
+}
+
+// data.state est purement local à cet appareil (voir getPersonDayState) :
+// il ne reflète donc jamais ce qu'une AUTRE personne a fait sur SON propre
+// appareil (ex. l'admin qui regarde le tableau de bord d'un enfant). Pour
+// ces cas, on reconstruit l'état du jour depuis le Journal (vérité serveur),
+// exposé par n8n dans data.todayCompletionsByPerson.
+function getServerDayState(personId) {
+  const entry = (data.todayCompletionsByPerson && data.todayCompletionsByPerson[personId]) || { choreIds: [], netStars: 0 };
+  const completedChores = [];
+  const repeatCounts = {};
+  entry.choreIds.forEach(choreId => {
+    repeatCounts[choreId] = (repeatCounts[choreId] || 0) + 1;
+    if (!completedChores.includes(choreId)) completedChores.push(choreId);
+  });
+  return {
+    completedChores,
+    repeatCounts,
+    purchasedRewards: [],
+    stars: Math.max(0, entry.netStars)
+  };
 }
 
 // Une corvée non attribuée (assignedTo vide, visible par tout le monde)
