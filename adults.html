@@ -2811,11 +2811,13 @@ let repasWeekOffset = 0;
           const prevActiveAdultId = data.activeAdultId;
           data = fresh;
           if (prevActiveAdultId) data.activeAdultId = prevActiveAdultId;
+          if (refreshSessionIfAdminChanged(data)) return;
           if (!applyInitialActiveAdult()) return;
           refreshRenders();
         });
       } else {
         data = await loadAppData();
+        if (refreshSessionIfAdminChanged(data)) return;
         if (!applyInitialActiveAdult()) return;
         setupOnce();
         refreshRenders();

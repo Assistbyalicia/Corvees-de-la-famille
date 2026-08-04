@@ -1092,11 +1092,13 @@
           const prevActiveChildId = data.activeChildId;
           data = fresh;
           if (prevActiveChildId) data.activeChildId = prevActiveChildId;
+          if (refreshSessionIfAdminChanged(data)) return;
           if (!applyInitialActiveChild()) return;
           refreshRendersKids();
         });
       } else {
         data = await loadAppData();
+        if (refreshSessionIfAdminChanged(data)) return;
         if (!applyInitialActiveChild()) return;
         setupOnceKids();
         refreshRendersKids();

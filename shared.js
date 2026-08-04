@@ -60,6 +60,24 @@ function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+// session.isAdmin n'est calculé qu'au login (setSession) et sinon jamais
+// réévalué : sans ça, un adulte déjà connecté ne voit jamais un changement
+// du checkbox "Admin" Notion tant qu'il ne se déconnecte/reconnecte pas. On
+// recalcule ici depuis des données fraîches (post-loadAppData) et on force
+// un reload si le statut a changé, pour que tout l'affichage one-shot basé
+// sur session.isAdmin (onglets, classe "restricted"...) reparte à neuf.
+function refreshSessionIfAdminChanged(freshData) {
+  const session = getSession();
+  if (!session) return false;
+  const allPeople = [...(freshData.children || []), ...(freshData.adults || [])];
+  const person = allPeople.find(p => p.id === session.personId);
+  const freshIsAdmin = !!(person && person.isAdmin);
+  if (freshIsAdmin === session.isAdmin) return false;
+  setSession(session.personId, allPeople);
+  window.location.reload();
+  return true;
+}
+
 // Le code d'une personne vient de Notion (propriété "Code", champ `pin` dans
 // la config) si elle en a défini un ; sinon on retombe sur AUTH_PINS
 // ci-dessus (utile pour une personne qui n'a pas encore de code dans Notion).
