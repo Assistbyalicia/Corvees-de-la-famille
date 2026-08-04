@@ -251,6 +251,10 @@
           <input id="new-chore-photo-required-personnes" type="checkbox" />
           📸 Photo requise pour valider (ex. rangement de chambre, brossage de dents)
         </label>
+        <label style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
+          <input id="new-chore-repeatable-personnes" type="checkbox" />
+          🔁 Peut être faite plusieurs fois dans la journée
+        </label>
         <button id="add-chore-btn-personnes" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </details>
       </div>
@@ -298,6 +302,10 @@
         <label style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
           <input id="new-chore-photo-required" type="checkbox" />
           📸 Photo requise pour valider (ex. rangement de chambre, brossage de dents)
+        </label>
+        <label style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
+          <input id="new-chore-repeatable" type="checkbox" />
+          🔁 Peut être faite plusieurs fois dans la journée
         </label>
         <button id="add-chore-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </details>
@@ -1661,46 +1669,91 @@ let repasWeekOffset = 0;
 
         const status = document.createElement("span");
         status.className = "badge";
-        status.textContent = completed ? "Déjà fait" : "À faire";
 
-        const btn = document.createElement("button");
-        btn.className = completed ? "btn-secondary" : "btn-primary";
-        btn.textContent = completed ? "Annuler" : "Valider";
+        if (chore.repeatable) {
+          const count = state.repeatCounts[chore.id] || 0;
+          status.textContent = count > 0 ? `Fait ${count}×` : "À faire";
 
-        btn.addEventListener("click", async () => {
-          const personState = getPersonDayState(person.id);
-          const index = personState.completedChores.indexOf(chore.id);
-          const isNowCompleted = index === -1;
-
-          if (isNowCompleted && chore.photoRequired) {
-            alert("📸 Cette corvée nécessite une photo pour être validée : envoie-la depuis l'appli enfant, elle apparaîtra ensuite ici dans « ⭐ Corvées → 📸 Photos » pour ta validation.");
-            return;
-          }
-
-          if (isNowCompleted) {
-            personState.completedChores.push(chore.id);
-            personState.stars += chore.stars;
-            await postChoreAction(person.id, chore.id, "complete");
-
-            if ((chore.frequency || "quotidien") === "ponctuel") {
-              // Une corvée ponctuelle disparaît définitivement une fois faite.
-              const choreIndex = (data.chores || []).indexOf(chore);
-              if (choreIndex !== -1) data.chores.splice(choreIndex, 1);
-              await postDeleteChore(chore.id);
+          const againBtn = document.createElement("button");
+          againBtn.className = "btn-primary";
+          againBtn.textContent = count > 0 ? "🔁 Encore" : "Valider";
+          againBtn.addEventListener("click", async () => {
+            const personState = getPersonDayState(person.id);
+            personState.repeatCounts[chore.id] = (personState.repeatCounts[chore.id] || 0) + 1;
+            if (!personState.completedChores.includes(chore.id)) {
+              personState.completedChores.push(chore.id);
             }
-          } else {
-            personState.completedChores.splice(index, 1);
+            personState.stars += chore.stars;
+            saveData(data);
+            renderAdultsSections();
+            await postChoreAction(person.id, chore.id, "complete");
+          });
+
+          const cancelBtn = document.createElement("button");
+          cancelBtn.className = "btn-secondary";
+          cancelBtn.textContent = "Annuler";
+          cancelBtn.disabled = count === 0;
+          cancelBtn.addEventListener("click", async () => {
+            const personState = getPersonDayState(person.id);
+            const current = personState.repeatCounts[chore.id] || 0;
+            if (current === 0) return;
+            personState.repeatCounts[chore.id] = current - 1;
+            if (personState.repeatCounts[chore.id] === 0) {
+              const idx = personState.completedChores.indexOf(chore.id);
+              if (idx !== -1) personState.completedChores.splice(idx, 1);
+            }
             personState.stars -= chore.stars;
             if (personState.stars < 0) personState.stars = 0;
+            saveData(data);
+            renderAdultsSections();
             await postChoreAction(person.id, chore.id, "cancel");
-          }
+          });
 
-          saveData(data);
-          renderAdultsSections();
-        });
+          right.appendChild(status);
+          right.appendChild(againBtn);
+          right.appendChild(cancelBtn);
+        } else {
+          status.textContent = completed ? "Déjà fait" : "À faire";
 
-        right.appendChild(status);
-        right.appendChild(btn);
+          const btn = document.createElement("button");
+          btn.className = completed ? "btn-secondary" : "btn-primary";
+          btn.textContent = completed ? "Annuler" : "Valider";
+
+          btn.addEventListener("click", async () => {
+            const personState = getPersonDayState(person.id);
+            const index = personState.completedChores.indexOf(chore.id);
+            const isNowCompleted = index === -1;
+
+            if (isNowCompleted && chore.photoRequired) {
+              alert("📸 Cette corvée nécessite une photo pour être validée : envoie-la depuis l'appli enfant, elle apparaîtra ensuite ici dans « ⭐ Corvées → 📸 Photos » pour ta validation.");
+              return;
+            }
+
+            if (isNowCompleted) {
+              personState.completedChores.push(chore.id);
+              personState.stars += chore.stars;
+              await postChoreAction(person.id, chore.id, "complete");
+
+              if ((chore.frequency || "quotidien") === "ponctuel") {
+                // Une corvée ponctuelle disparaît définitivement une fois faite.
+                const choreIndex = (data.chores || []).indexOf(chore);
+                if (choreIndex !== -1) data.chores.splice(choreIndex, 1);
+                await postDeleteChore(chore.id);
+              }
+            } else {
+              personState.completedChores.splice(index, 1);
+              personState.stars -= chore.stars;
+              if (personState.stars < 0) personState.stars = 0;
+              await postChoreAction(person.id, chore.id, "cancel");
+            }
+
+            saveData(data);
+            renderAdultsSections();
+          });
+
+          right.appendChild(status);
+          right.appendChild(btn);
+        }
 
         li.appendChild(left);
         li.appendChild(right);
@@ -2029,10 +2082,26 @@ let repasWeekOffset = 0;
         photoRequiredLabel.appendChild(photoRequiredCheckbox);
         photoRequiredLabel.appendChild(document.createTextNode("📸 Photo requise"));
 
+        const repeatableLabel = document.createElement("label");
+        repeatableLabel.style.display = "flex";
+        repeatableLabel.style.alignItems = "center";
+        repeatableLabel.style.gap = "0.3rem";
+        const repeatableCheckbox = document.createElement("input");
+        repeatableCheckbox.type = "checkbox";
+        repeatableCheckbox.checked = !!chore.repeatable;
+        repeatableCheckbox.addEventListener("change", async () => {
+          chore.repeatable = repeatableCheckbox.checked;
+          saveData(data);
+          await postUpdateChoreRepeatable(chore.id, chore.repeatable);
+        });
+        repeatableLabel.appendChild(repeatableCheckbox);
+        repeatableLabel.appendChild(document.createTextNode("🔁 Plusieurs fois par jour"));
+
         right.appendChild(checkboxes);
         right.appendChild(selectFrequency);
         right.appendChild(weekdaysContainer);
         right.appendChild(photoRequiredLabel);
+        right.appendChild(repeatableLabel);
         right.appendChild(btn);
 
         li.appendChild(left);
@@ -2651,6 +2720,7 @@ let repasWeekOffset = 0;
       const selectFrequency = document.getElementById("new-chore-frequency" + suffix);
       const weekdaysContainer = document.getElementById("new-chore-weekdays" + suffix);
       const inputPhotoRequired = document.getElementById("new-chore-photo-required" + suffix);
+      const inputRepeatable = document.getElementById("new-chore-repeatable" + suffix);
 
       if (!peopleContainer || !btnAdd || !inputLabel || !inputStars || !selectFrequency || !weekdaysContainer) return;
 
@@ -2665,6 +2735,7 @@ let repasWeekOffset = 0;
         const frequency = selectFrequency.value;
         const weeklyDays = frequency === "hebdomadaire" ? getCheckedDays(weekdaysContainer) : undefined;
         const photoRequired = !!(inputPhotoRequired && inputPhotoRequired.checked);
+        const repeatable = !!(inputRepeatable && inputRepeatable.checked);
 
         if (!label) {
           alert("Merci de saisir un nom de corvée.");
@@ -2683,6 +2754,7 @@ let repasWeekOffset = 0;
         };
         if (weeklyDays !== undefined) newChore.weeklyDays = weeklyDays;
         if (photoRequired) newChore.photoRequired = true;
+        if (repeatable) newChore.repeatable = true;
 
         (data.chores || (data.chores = [])).push(newChore);
 
@@ -2699,8 +2771,9 @@ let repasWeekOffset = 0;
         buildDayCheckboxes(weekdaysContainer, []);
         weekdaysContainer.style.display = "none";
         if (inputPhotoRequired) inputPhotoRequired.checked = false;
+        if (inputRepeatable) inputRepeatable.checked = false;
 
-        await postAddChore(newId, label, stars, personIds, frequency, weeklyDays, photoRequired);
+        await postAddChore(newId, label, stars, personIds, frequency, weeklyDays, photoRequired, repeatable);
       });
     }
 

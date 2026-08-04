@@ -154,6 +154,9 @@ function getPersonDayState(personId) {
   if (!data.state[personId][dayKey].purchasedRewards) {
     data.state[personId][dayKey].purchasedRewards = [];
   }
+  if (!data.state[personId][dayKey].repeatCounts) {
+    data.state[personId][dayKey].repeatCounts = {};
+  }
   return data.state[personId][dayKey];
 }
 
@@ -466,7 +469,7 @@ async function postRewardAction(personId, rewardId, action) {
 // est un tableau (une corvée peut être assignée à plusieurs personnes).
 // frequency: "quotidien" (défaut) | "hebdomadaire" | "ponctuel" ; weeklyDays
 // (tableau de jours, 0=dimanche...6=samedi) n'est utile que pour "hebdomadaire".
-async function postAddChore(choreId, label, stars, personIds, frequency, weeklyDays, photoRequired) {
+async function postAddChore(choreId, label, stars, personIds, frequency, weeklyDays, photoRequired, repeatable) {
   return postToServer({
         action: "add_chore",
         choreId,
@@ -475,7 +478,8 @@ async function postAddChore(choreId, label, stars, personIds, frequency, weeklyD
         personIds,
         frequency,
         weeklyDays,
-        photoRequired: !!photoRequired
+        photoRequired: !!photoRequired,
+        repeatable: !!repeatable
       });
 }
 
@@ -486,6 +490,16 @@ async function postUpdateChorePhotoRequired(choreId, photoRequired) {
         action: "update_chore_photo_required",
         choreId,
         photoRequired: !!photoRequired
+      });
+}
+
+// action: "update_chore_repeatable" — active/désactive la possibilité de
+// faire une corvée plusieurs fois dans la même journée.
+async function postUpdateChoreRepeatable(choreId, repeatable) {
+  return postToServer({
+        action: "update_chore_repeatable",
+        choreId,
+        repeatable: !!repeatable
       });
 }
 

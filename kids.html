@@ -777,6 +777,49 @@
             btn.addEventListener("click", () => triggerChorePhotoCapture(chore));
             right.appendChild(btn);
           }
+        } else if (chore.repeatable) {
+          const count = childState.repeatCounts[chore.id] || 0;
+          status.textContent = count > 0 ? `Fait ${count}×` : "À faire";
+
+          const againBtn = document.createElement("button");
+          againBtn.className = "btn-primary";
+          againBtn.textContent = count > 0 ? "🔁 Encore" : "Valider";
+          againBtn.addEventListener("click", async () => {
+            const state = getPersonDayState(data.activeChildId);
+            state.repeatCounts[chore.id] = (state.repeatCounts[chore.id] || 0) + 1;
+            if (!state.completedChores.includes(chore.id)) {
+              state.completedChores.push(chore.id);
+            }
+            state.stars += chore.stars;
+            showStarPop(againBtn, `+${chore.stars}⭐`);
+            saveData(data);
+            renderAll();
+            await postChoreAction(data.activeChildId, chore.id, "complete");
+          });
+
+          const cancelBtn = document.createElement("button");
+          cancelBtn.className = "btn-secondary";
+          cancelBtn.textContent = "Annuler";
+          cancelBtn.disabled = count === 0;
+          cancelBtn.addEventListener("click", async () => {
+            const state = getPersonDayState(data.activeChildId);
+            const current = state.repeatCounts[chore.id] || 0;
+            if (current === 0) return;
+            state.repeatCounts[chore.id] = current - 1;
+            if (state.repeatCounts[chore.id] === 0) {
+              const index = state.completedChores.indexOf(chore.id);
+              if (index !== -1) state.completedChores.splice(index, 1);
+            }
+            state.stars -= chore.stars;
+            if (state.stars < 0) state.stars = 0;
+            saveData(data);
+            renderAll();
+            await postChoreAction(data.activeChildId, chore.id, "cancel");
+          });
+
+          right.appendChild(status);
+          right.appendChild(againBtn);
+          right.appendChild(cancelBtn);
         } else {
           status.textContent = completed ? "Déjà fait" : "À faire";
 
