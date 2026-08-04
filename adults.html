@@ -126,6 +126,8 @@
     body.restricted [data-subpanel="corvees"],
     body.restricted [data-subtab="recompenses"],
     body.restricted [data-subpanel="recompenses"],
+    body.restricted [data-subtab="photos"],
+    body.restricted [data-subpanel="photos"],
     body.restricted [data-subtab="codes"],
     body.restricted [data-subpanel="codes"] {
       display: none;
@@ -230,6 +232,10 @@
           Récompenses
           <span id="recompenses-tab-badge" class="tab-badge" style="display:none;"></span>
         </button>
+        <button data-subtab="photos" class="btn-secondary">
+          📸 Photos
+          <span id="photos-tab-badge" class="tab-badge" style="display:none;"></span>
+        </button>
         <button data-subtab="recap" class="btn-secondary">Récap</button>
       </div>
 
@@ -258,6 +264,10 @@
         </div>
         <div class="assign-checkboxes" id="new-chore-weekdays" style="margin-top:0.5rem; display:none;"></div>
         <div class="assign-checkboxes" id="new-chore-people" style="margin-top:0.5rem;"></div>
+        <label style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
+          <input id="new-chore-photo-required" type="checkbox" />
+          📸 Photo requise pour valider (ex. rangement de chambre, brossage de dents)
+        </label>
         <button id="add-chore-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </details>
       </div>
@@ -295,6 +305,17 @@
         <div class="assign-checkboxes" id="new-reward-people" style="margin-top:0.5rem;"></div>
         <button id="add-reward-btn" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
       </details>
+      </div>
+
+      <div data-subpanel="photos">
+      <div class="section">
+        <h2>📸 Photos à valider</h2>
+        <p class="small">
+          Corvées dont la validation nécessite une preuve photo. Les points ne
+          sont attribués qu'après ta validation.
+        </p>
+        <ul class="list" id="photo-validations-list"></ul>
+      </div>
       </div>
 
       <div data-subpanel="recap">
@@ -1949,9 +1970,25 @@ let repasWeekOffset = 0;
           }
         });
 
+        const photoRequiredLabel = document.createElement("label");
+        photoRequiredLabel.style.display = "flex";
+        photoRequiredLabel.style.alignItems = "center";
+        photoRequiredLabel.style.gap = "0.3rem";
+        const photoRequiredCheckbox = document.createElement("input");
+        photoRequiredCheckbox.type = "checkbox";
+        photoRequiredCheckbox.checked = !!chore.photoRequired;
+        photoRequiredCheckbox.addEventListener("change", async () => {
+          chore.photoRequired = photoRequiredCheckbox.checked;
+          saveData(data);
+          await postUpdateChorePhotoRequired(chore.id, chore.photoRequired);
+        });
+        photoRequiredLabel.appendChild(photoRequiredCheckbox);
+        photoRequiredLabel.appendChild(document.createTextNode("📸 Photo requise"));
+
         right.appendChild(checkboxes);
         right.appendChild(selectFrequency);
         right.appendChild(weekdaysContainer);
+        right.appendChild(photoRequiredLabel);
         right.appendChild(btn);
 
         li.appendChild(left);
@@ -2136,19 +2173,123 @@ let repasWeekOffset = 0;
       }
     }
 
+    // Le badge du sous-onglet Récompenses et celui des Photos ont chacun leur
+    // propre décompte ; le badge du grand onglet "⭐ Corvées" les additionne
+    // pour rester la source unique de "il y a quelque chose à traiter".
+    function updateCorveesGroupBadge() {
+      const groupBadge = document.getElementById("corvees-group-tab-badge");
+      if (!groupBadge) return;
+      const rewardCount = (data.rewards || []).filter(reward => reward.pending).length;
+      const photoCount = (data.photoValidations || []).filter(v => v.status === "pending").length;
+      const total = rewardCount + photoCount;
+      if (total > 0) {
+        groupBadge.textContent = total;
+        groupBadge.style.display = "block";
+      } else {
+        groupBadge.style.display = "none";
+      }
+    }
+
     function renderPendingRewardsBadge() {
       const badge = document.getElementById("recompenses-tab-badge");
-      const groupBadge = document.getElementById("corvees-group-tab-badge");
       const count = (data.rewards || []).filter(reward => reward.pending).length;
 
-      [badge, groupBadge].forEach(el => {
-        if (!el) return;
+      if (badge) {
         if (count > 0) {
-          el.textContent = count;
-          el.style.display = "block";
+          badge.textContent = count;
+          badge.style.display = "block";
         } else {
-          el.style.display = "none";
+          badge.style.display = "none";
         }
+      }
+      updateCorveesGroupBadge();
+    }
+
+    function renderPendingPhotoValidationsBadge() {
+      const badge = document.getElementById("photos-tab-badge");
+      const count = (data.photoValidations || []).filter(v => v.status === "pending").length;
+
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count;
+          badge.style.display = "block";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+      updateCorveesGroupBadge();
+    }
+
+    function renderPhotoValidationsList() {
+      const list = document.getElementById("photo-validations-list");
+      if (!list) return;
+      list.innerHTML = "";
+
+      renderPendingPhotoValidationsBadge();
+
+      const pending = (data.photoValidations || []).filter(v => v.status === "pending");
+
+      if (pending.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucune photo en attente de validation.";
+        list.appendChild(li);
+        return;
+      }
+
+      pending.forEach(validation => {
+        const li = document.createElement("li");
+        li.style.flexDirection = "column";
+        li.style.alignItems = "stretch";
+
+        const top = document.createElement("div");
+        top.style.display = "flex";
+        top.style.justifyContent = "space-between";
+        top.style.alignItems = "center";
+        top.style.gap = "0.5rem";
+
+        const left = document.createElement("span");
+        left.textContent = `${validation.choreLabel || validation.choreId} — ${validation.childName || validation.childId} (${validation.date})`;
+        top.appendChild(left);
+        li.appendChild(top);
+
+        if (validation.photo) {
+          const img = document.createElement("img");
+          img.src = validation.photo;
+          img.alt = "Photo preuve";
+          img.className = "chore-photo-proof";
+          li.appendChild(img);
+        }
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "0.5rem";
+        actions.style.marginTop = "0.5rem";
+
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "btn-primary";
+        approveBtn.textContent = "✅ Valider";
+        approveBtn.addEventListener("click", async () => {
+          validation.status = "approved";
+          saveData(data);
+          renderPhotoValidationsList();
+          await postReviewChorePhoto(validation.childId, validation.choreId, validation.date, "approve");
+        });
+
+        const rejectBtn = document.createElement("button");
+        rejectBtn.className = "btn-secondary";
+        rejectBtn.textContent = "❌ Refuser";
+        rejectBtn.addEventListener("click", async () => {
+          validation.status = "rejected";
+          saveData(data);
+          renderPhotoValidationsList();
+          await postReviewChorePhoto(validation.childId, validation.choreId, validation.date, "reject");
+        });
+
+        actions.appendChild(approveBtn);
+        actions.appendChild(rejectBtn);
+        li.appendChild(actions);
+
+        list.appendChild(li);
       });
     }
 
@@ -2457,6 +2598,7 @@ let repasWeekOffset = 0;
       const inputStars = document.getElementById("new-chore-stars");
       const selectFrequency = document.getElementById("new-chore-frequency");
       const weekdaysContainer = document.getElementById("new-chore-weekdays");
+      const inputPhotoRequired = document.getElementById("new-chore-photo-required");
 
       if (!peopleContainer || !btnAdd || !inputLabel || !inputStars || !selectFrequency || !weekdaysContainer) return;
 
@@ -2470,6 +2612,7 @@ let repasWeekOffset = 0;
         const personIds = getCheckedPersonIds(peopleContainer);
         const frequency = selectFrequency.value;
         const weeklyDays = frequency === "hebdomadaire" ? getCheckedDays(weekdaysContainer) : undefined;
+        const photoRequired = !!(inputPhotoRequired && inputPhotoRequired.checked);
 
         if (!label) {
           alert("Merci de saisir un nom de corvée.");
@@ -2487,6 +2630,7 @@ let repasWeekOffset = 0;
           _source: "local"
         };
         if (weeklyDays !== undefined) newChore.weeklyDays = weeklyDays;
+        if (photoRequired) newChore.photoRequired = true;
 
         (data.chores || (data.chores = [])).push(newChore);
 
@@ -2501,8 +2645,9 @@ let repasWeekOffset = 0;
         selectFrequency.value = "quotidien";
         buildDayCheckboxes(weekdaysContainer, []);
         weekdaysContainer.style.display = "none";
+        if (inputPhotoRequired) inputPhotoRequired.checked = false;
 
-        await postAddChore(newId, label, stars, personIds, frequency, weeklyDays);
+        await postAddChore(newId, label, stars, personIds, frequency, weeklyDays, photoRequired);
       });
     }
 
@@ -2583,6 +2728,7 @@ let repasWeekOffset = 0;
         renderChoreHistory();
         renderRewardsList();
         renderProposedRewardsList();
+        renderPhotoValidationsList();
         renderRewardHistory();
         renderCodesList();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])]);

@@ -94,6 +94,7 @@ const defaultData = {
   shoppingChecked: [],
   recurringIngredients: [],
   pendingActions: [],
+  photoValidations: [],
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -189,6 +190,7 @@ async function loadAppData() {
       adults: mergeById(config.adults, local.adults),
       chores: mergeById(config.chores, local.chores),
       rewards: mergeById(config.rewards, local.rewards),
+      photoValidations: mergeById(config.photoValidations, local.photoValidations),
       weeklyRecap: config.weeklyRecap || { days: [] },
       rewardHistory: config.rewardHistory || [],
       choreHistory: config.choreHistory || [],
@@ -334,6 +336,65 @@ async function postChoreAction(personId, choreId, action) {
       });
 }
 
+// action: "submit_chore_photo" — envoie la photo-preuve d'une corvée qui
+// requiert une validation (photoBase64 est une data URL "data:image/...;base64,...").
+async function postSubmitChorePhoto(personId, choreId, photoBase64) {
+  return postToServer({
+        action: "submit_chore_photo",
+        personId,
+        choreId,
+        date: getTodayKey(),
+        photoBase64
+      });
+}
+
+// action: "review_chore_photo" — decision: "approve" | "reject".
+async function postReviewChorePhoto(personId, choreId, date, decision) {
+  return postToServer({
+        action: "review_chore_photo",
+        personId,
+        choreId,
+        date,
+        decision
+      });
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function findPhotoValidation(photoValidations, personId, choreId, dateKey) {
+  return (photoValidations || []).find(
+    v => v.childId === personId && v.choreId === choreId && v.date === dateKey
+  );
+}
+
+// Une photo validée par l'admin l'est forcément depuis un autre appareil : on
+// ne peut pas créditer les étoiles au moment du clic (on ne sait pas encore
+// si ce sera accepté). On les crédite ici, au prochain rafraîchissement de la
+// config qui voit le statut "approved" — de façon idempotente (complétée une
+// seule fois grâce à completedChores) pour survivre à plusieurs appels.
+function reconcileApprovedPhotoChores(personId) {
+  if (!personId) return;
+  const dateKey = getTodayKey();
+  const state = getPersonDayState(personId);
+  let changed = false;
+  (data.photoValidations || []).forEach(v => {
+    if (v.childId !== personId || v.date !== dateKey || v.status !== "approved") return;
+    if (state.completedChores.includes(v.choreId)) return;
+    const chore = (data.chores || []).find(c => c.id === v.choreId);
+    state.completedChores.push(v.choreId);
+    state.stars += chore ? chore.stars : 0;
+    changed = true;
+  });
+  if (changed) saveData(data);
+}
+
 // action: "purchase" pour l'instant.
 async function postRewardAction(personId, rewardId, action) {
   return postToServer({
@@ -349,7 +410,7 @@ async function postRewardAction(personId, rewardId, action) {
 // est un tableau (une corvée peut être assignée à plusieurs personnes).
 // frequency: "quotidien" (défaut) | "hebdomadaire" | "ponctuel" ; weeklyDays
 // (tableau de jours, 0=dimanche...6=samedi) n'est utile que pour "hebdomadaire".
-async function postAddChore(choreId, label, stars, personIds, frequency, weeklyDays) {
+async function postAddChore(choreId, label, stars, personIds, frequency, weeklyDays, photoRequired) {
   return postToServer({
         action: "add_chore",
         choreId,
@@ -357,7 +418,18 @@ async function postAddChore(choreId, label, stars, personIds, frequency, weeklyD
         stars,
         personIds,
         frequency,
-        weeklyDays
+        weeklyDays,
+        photoRequired: !!photoRequired
+      });
+}
+
+// action: "update_chore_photo_required" — active/désactive l'exigence de
+// photo-preuve sur une corvée existante.
+async function postUpdateChorePhotoRequired(choreId, photoRequired) {
+  return postToServer({
+        action: "update_chore_photo_required",
+        choreId,
+        photoRequired: !!photoRequired
       });
 }
 

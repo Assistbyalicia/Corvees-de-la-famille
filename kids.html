@@ -746,6 +746,7 @@
         data.gardeOverrides,
         data.gardeBlocks
       );
+      const todayKey = getTodayKey();
 
       choresForChild.forEach(chore => {
         const li = document.createElement("li");
@@ -754,48 +755,66 @@
         left.textContent = `${chore.label} (+${chore.stars}⭐)`;
 
         const right = document.createElement("div");
+        right.appendChild(buildChoreTimerWidget(chore.id, `chore-timer-${chore.id}`));
 
         const completed = childState.completedChores.includes(chore.id);
+        const validation = chore.photoRequired
+          ? findPhotoValidation(data.photoValidations, data.activeChildId, chore.id, todayKey)
+          : null;
+        const photoPending = validation && validation.status === "pending";
 
         const status = document.createElement("span");
         status.className = "badge";
-        status.textContent = completed ? "Déjà fait" : "À faire";
 
-        const btn = document.createElement("button");
-        btn.className = completed ? "btn-secondary" : "btn-primary";
-        btn.textContent = completed ? "Annuler" : "Valider";
+        if (chore.photoRequired && !completed) {
+          status.textContent = photoPending ? "📸 En attente de validation" : (validation && validation.status === "rejected" ? "❌ Refusée" : "À faire");
+          right.appendChild(status);
 
-        btn.addEventListener("click", async () => {
-          const state = getPersonDayState(data.activeChildId);
-          const index = state.completedChores.indexOf(chore.id);
-          const isNowCompleted = index === -1;
-
-          if (isNowCompleted) {
-            state.completedChores.push(chore.id);
-            state.stars += chore.stars;
-            showStarPop(btn, `+${chore.stars}⭐`);
-            await postChoreAction(data.activeChildId, chore.id, "complete");
-
-            if ((chore.frequency || "quotidien") === "ponctuel") {
-              // Une corvée ponctuelle disparaît définitivement une fois faite.
-              const choreIndex = (data.chores || []).indexOf(chore);
-              if (choreIndex !== -1) data.chores.splice(choreIndex, 1);
-              await postDeleteChore(chore.id);
-            }
-          } else {
-            state.completedChores.splice(index, 1);
-            state.stars -= chore.stars;
-            if (state.stars < 0) state.stars = 0;
-            await postChoreAction(data.activeChildId, chore.id, "cancel");
+          if (!photoPending) {
+            const btn = document.createElement("button");
+            btn.className = "btn-primary";
+            btn.textContent = validation && validation.status === "rejected" ? "📸 Réessayer" : "📸 Envoyer une photo";
+            btn.addEventListener("click", () => triggerChorePhotoCapture(chore));
+            right.appendChild(btn);
           }
+        } else {
+          status.textContent = completed ? "Déjà fait" : "À faire";
 
-          saveData(data);
-          renderAll();
-        });
+          const btn = document.createElement("button");
+          btn.className = completed ? "btn-secondary" : "btn-primary";
+          btn.textContent = completed ? "Annuler" : "Valider";
 
-        right.appendChild(buildChoreTimerWidget(chore.id, `chore-timer-${chore.id}`));
-        right.appendChild(status);
-        right.appendChild(btn);
+          btn.addEventListener("click", async () => {
+            const state = getPersonDayState(data.activeChildId);
+            const index = state.completedChores.indexOf(chore.id);
+            const isNowCompleted = index === -1;
+
+            if (isNowCompleted) {
+              state.completedChores.push(chore.id);
+              state.stars += chore.stars;
+              showStarPop(btn, `+${chore.stars}⭐`);
+              await postChoreAction(data.activeChildId, chore.id, "complete");
+
+              if ((chore.frequency || "quotidien") === "ponctuel") {
+                // Une corvée ponctuelle disparaît définitivement une fois faite.
+                const choreIndex = (data.chores || []).indexOf(chore);
+                if (choreIndex !== -1) data.chores.splice(choreIndex, 1);
+                await postDeleteChore(chore.id);
+              }
+            } else {
+              state.completedChores.splice(index, 1);
+              state.stars -= chore.stars;
+              if (state.stars < 0) state.stars = 0;
+              await postChoreAction(data.activeChildId, chore.id, "cancel");
+            }
+
+            saveData(data);
+            renderAll();
+          });
+
+          right.appendChild(status);
+          right.appendChild(btn);
+        }
 
         li.appendChild(left);
         li.appendChild(right);
@@ -807,6 +826,42 @@
         li.textContent = "Aucune corvée attribuée pour aujourd’hui.";
         list.appendChild(li);
       }
+    }
+
+    // Ouvre l'appareil photo, envoie la photo pour validation, puis affiche un
+    // fantôme local "en attente" en attendant que la config confirme l'envoi
+    // (même principe que les propositions de récompense : voir mergeById()).
+    function triggerChorePhotoCapture(chore) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.capture = "environment";
+      input.addEventListener("change", async () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        const personId = data.activeChildId;
+        const photoBase64 = await fileToBase64(file);
+
+        (data.photoValidations || (data.photoValidations = [])).push({
+          id: `photo-local-${Date.now()}`,
+          childId: personId,
+          childName: getActiveChildName(),
+          choreId: chore.id,
+          choreLabel: chore.label,
+          date: getTodayKey(),
+          photo: photoBase64,
+          status: "pending",
+          pending: true,
+          _source: "local",
+          _localCreatedAt: Date.now()
+        });
+        saveData(data);
+        renderAll();
+
+        await postSubmitChorePhoto(personId, chore.id, photoBase64);
+      });
+      input.click();
     }
 
     function renderRewards() {
@@ -938,6 +993,7 @@
     }
 
     function renderAll() {
+      reconcileApprovedPhotoChores(data.activeChildId);
       renderChildren();
       renderProgress();
       renderQuetesBadge();

@@ -511,6 +511,14 @@ tfoot td {
   font-weight: 700;
   font-size: 0.95rem;
 }
+.chore-photo-proof {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
 .recipe-makeable-badge {
   display: inline-block;
   margin-left: 0.5rem;
