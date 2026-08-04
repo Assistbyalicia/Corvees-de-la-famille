@@ -836,8 +836,16 @@
       input.type = "file";
       input.accept = "image/*";
       input.capture = "environment";
+      // Certains navigateurs mobiles (Safari iOS notamment) n'ouvrent pas le
+      // sélecteur/appareil photo si l'input n'est pas réellement dans le DOM.
+      input.style.position = "fixed";
+      input.style.top = "-1000px";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+
       input.addEventListener("change", async () => {
         const file = input.files[0];
+        input.remove();
         if (!file) return;
 
         const personId = data.activeChildId;
