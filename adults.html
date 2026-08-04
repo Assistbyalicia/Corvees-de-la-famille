@@ -1641,6 +1641,11 @@ let repasWeekOffset = 0;
           const index = personState.completedChores.indexOf(chore.id);
           const isNowCompleted = index === -1;
 
+          if (isNowCompleted && chore.photoRequired) {
+            alert("📸 Cette corvée nécessite une photo pour être validée : envoie-la depuis l'appli enfant, elle apparaîtra ensuite ici dans « ⭐ Corvées → 📸 Photos » pour ta validation.");
+            return;
+          }
+
           if (isNowCompleted) {
             personState.completedChores.push(chore.id);
             personState.stars += chore.stars;
