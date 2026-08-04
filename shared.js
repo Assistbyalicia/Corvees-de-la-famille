@@ -383,13 +383,21 @@ function reconcileApprovedPhotoChores(personId) {
   if (!personId) return;
   const dateKey = getTodayKey();
   const state = getPersonDayState(personId);
+  // On se souvient de chaque validation déjà traitée (par son id, pas par
+  // choreId) : sans ça, annuler une corvée à photo remise dans completedChores
+  // par ce même reconcile la faisait réapparaître aussitôt au rendu suivant,
+  // rendant "Annuler" inopérant pour toute corvée déjà approuvée par photo.
+  if (!state.reconciledPhotoValidationIds) state.reconciledPhotoValidationIds = [];
   let changed = false;
   (data.photoValidations || []).forEach(v => {
     if (v.childId !== personId || v.date !== dateKey || v.status !== "approved") return;
-    if (state.completedChores.includes(v.choreId)) return;
-    const chore = (data.chores || []).find(c => c.id === v.choreId);
-    state.completedChores.push(v.choreId);
-    state.stars += chore ? chore.stars : 0;
+    if (state.reconciledPhotoValidationIds.includes(v.id)) return;
+    state.reconciledPhotoValidationIds.push(v.id);
+    if (!state.completedChores.includes(v.choreId)) {
+      const chore = (data.chores || []).find(c => c.id === v.choreId);
+      state.completedChores.push(v.choreId);
+      state.stars += chore ? chore.stars : 0;
+    }
     changed = true;
   });
   if (changed) saveData(data);
