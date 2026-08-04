@@ -122,6 +122,8 @@
 
     body.restricted [data-subtab="enfants"],
     body.restricted [data-subpanel="enfants"],
+    body.restricted [data-subtab="corvees-libres"],
+    body.restricted [data-subpanel="corvees-libres"],
     body.restricted [data-subtab="corvees"],
     body.restricted [data-subpanel="corvees"],
     body.restricted [data-subtab="recompenses"],
@@ -187,6 +189,7 @@
       <div class="subnav" id="personnes-subnav">
         <button data-subtab="enfants" class="btn-secondary">Enfants</button>
         <button data-subtab="adultes" class="btn-secondary">Adultes</button>
+        <button data-subtab="corvees-libres" class="btn-secondary">⭐ Corvées</button>
       </div>
 
       <div data-subpanel="enfants">
@@ -222,6 +225,34 @@
         <div class="people-picker" id="adults-picker"></div>
         <div id="adults-sections"></div>
       </div>
+      </div>
+
+      <div data-subpanel="corvees-libres">
+      <div class="section">
+        <h2>Corvées non attribuées</h2>
+        <p class="small">Corvées visibles par tout le monde faute d'assignation précise. Coche une ou plusieurs personnes pour les leur attribuer.</p>
+        <ul class="list" id="unassigned-chores-list"></ul>
+      </div>
+
+      <details class="section">
+        <summary>Ajouter une corvée</summary>
+        <p class="small">
+          Crée une nouvelle corvée et assigne-la à une ou plusieurs personnes
+          (laisse tout décoché pour la rendre visible par tout le monde).
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; align-items:center;">
+          <input id="new-chore-label-personnes" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+          <input id="new-chore-stars-personnes" type="number" min="1" max="10" value="1" style="width:80px; padding:0.25rem;" />
+          <select id="new-chore-frequency-personnes" style="padding:0.25rem;"></select>
+        </div>
+        <div class="assign-checkboxes" id="new-chore-weekdays-personnes" style="margin-top:0.5rem; display:none;"></div>
+        <div class="assign-checkboxes" id="new-chore-people-personnes" style="margin-top:0.5rem;"></div>
+        <label style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
+          <input id="new-chore-photo-required-personnes" type="checkbox" />
+          📸 Photo requise pour valider (ex. rangement de chambre, brossage de dents)
+        </label>
+        <button id="add-chore-btn-personnes" class="btn-primary" style="margin-top:0.5rem;">Ajouter</button>
+      </details>
       </div>
     </div>
 
@@ -1794,14 +1825,19 @@ let repasWeekOffset = 0;
       );
     }
 
-    function renderChoresList() {
-      const list = document.getElementById("chores-list");
+    // filterFn/listId permettent de réutiliser ce rendu pour un sous-ensemble
+    // des corvées affiché ailleurs (ex. la liste des corvées non attribuées
+    // dans l'onglet Personnes), sans dupliquer toute la logique d'édition.
+    function renderChoresList(filterFn, listId) {
+      listId = listId || "chores-list";
+      const list = document.getElementById(listId);
       if (!list) return;
       list.innerHTML = "";
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const chores = (data.chores || []).filter(chore => !filterFn || filterFn(chore));
 
-      (data.chores || []).forEach(chore => {
+      chores.forEach(chore => {
         const li = document.createElement("li");
         li.style.flexDirection = "column";
         li.style.alignItems = "stretch";
@@ -1845,7 +1881,7 @@ let repasWeekOffset = 0;
           editBtn.style.flexShrink = "0";
           editBtn.addEventListener("click", () => {
             expandedChoreIds.add(chore.id);
-            renderChoresList();
+            renderChoresList(filterFn, listId);
           });
 
           row.appendChild(summary);
@@ -1906,7 +1942,7 @@ let repasWeekOffset = 0;
         reduceBtn.style.marginLeft = "auto";
         reduceBtn.addEventListener("click", () => {
           expandedChoreIds.delete(chore.id);
-          renderChoresList();
+          renderChoresList(filterFn, listId);
         });
         left.appendChild(reduceBtn);
 
@@ -1930,6 +1966,8 @@ let repasWeekOffset = 0;
           saveData(data);
           renderChildrenTable();
           renderAdultsSections();
+          renderChoresList();
+          renderUnassignedChoresList();
           await postUpdateChoreAssignment(chore.id, chore.assignedTo);
         });
 
@@ -1969,6 +2007,7 @@ let repasWeekOffset = 0;
             expandedChoreIds.delete(chore.id);
             saveData(data);
             renderChoresList();
+            renderUnassignedChoresList();
             renderChildrenTable();
             renderAdultsSections();
             await postDeleteChore(chore.id);
@@ -2001,11 +2040,15 @@ let repasWeekOffset = 0;
         list.appendChild(li);
       });
 
-      if (!data.chores || data.chores.length === 0) {
+      if (chores.length === 0) {
         const li = document.createElement("li");
-        li.textContent = "Aucune corvée configurée.";
+        li.textContent = filterFn ? "Aucune corvée non attribuée." : "Aucune corvée configurée.";
         list.appendChild(li);
       }
+    }
+
+    function renderUnassignedChoresList() {
+      renderChoresList(chore => !chore.assignedTo || chore.assignedTo.length === 0, "unassigned-chores-list");
     }
 
     function renderRewardsList() {
@@ -2596,14 +2639,18 @@ let repasWeekOffset = 0;
       toggleWeekdays();
     }
 
-    function setupAddChoreForm() {
-      const peopleContainer = document.getElementById("new-chore-people");
-      const btnAdd = document.getElementById("add-chore-btn");
-      const inputLabel = document.getElementById("new-chore-label");
-      const inputStars = document.getElementById("new-chore-stars");
-      const selectFrequency = document.getElementById("new-chore-frequency");
-      const weekdaysContainer = document.getElementById("new-chore-weekdays");
-      const inputPhotoRequired = document.getElementById("new-chore-photo-required");
+    // suffix permet de brancher le même formulaire sur deux emplacements de
+    // l'interface (l'onglet "Corvées" et l'onglet "Personnes"), avec des ids
+    // distincts pour chaque jeu de champs HTML.
+    function setupAddChoreForm(suffix) {
+      suffix = suffix || "";
+      const peopleContainer = document.getElementById("new-chore-people" + suffix);
+      const btnAdd = document.getElementById("add-chore-btn" + suffix);
+      const inputLabel = document.getElementById("new-chore-label" + suffix);
+      const inputStars = document.getElementById("new-chore-stars" + suffix);
+      const selectFrequency = document.getElementById("new-chore-frequency" + suffix);
+      const weekdaysContainer = document.getElementById("new-chore-weekdays" + suffix);
+      const inputPhotoRequired = document.getElementById("new-chore-photo-required" + suffix);
 
       if (!peopleContainer || !btnAdd || !inputLabel || !inputStars || !selectFrequency || !weekdaysContainer) return;
 
@@ -2643,6 +2690,7 @@ let repasWeekOffset = 0;
         renderChildrenTable();
         renderAdultsSections();
         renderChoresList();
+        renderUnassignedChoresList();
 
         inputLabel.value = "";
         inputStars.value = "1";
@@ -2730,6 +2778,7 @@ let repasWeekOffset = 0;
         renderAdultsPicker();
         renderAdultsSections();
         renderChoresList();
+        renderUnassignedChoresList();
         renderChoreHistory();
         renderRewardsList();
         renderProposedRewardsList();
@@ -2753,6 +2802,7 @@ let repasWeekOffset = 0;
       if (session.isAdmin) {
         setupTabs(undefined, tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
         setupAddChoreForm();
+        setupAddChoreForm("-personnes");
         setupAddRewardForm();
       } else {
         setupTabs("personnes", tabName => { if (tabName === "repas") ensureRepasDataLoaded(); });
