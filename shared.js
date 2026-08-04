@@ -368,6 +368,36 @@ function fileToBase64(file) {
   });
 }
 
+// Une photo brute de téléphone pèse plusieurs Mo : encodée en base64 dans le
+// corps JSON du webhook, elle dépasse la limite de taille de la chaîne de
+// reverse-proxy devant n8n, qui la rejette silencieusement avant même de
+// créer une exécution (aucune erreur visible côté workflow). On redimensionne
+// et recompresse donc la photo côté client avant l'envoi.
+function compressImageToBase64(file, maxDimension, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width > height && width > maxDimension) {
+        height = Math.round((height * maxDimension) / width);
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = Math.round((width * maxDimension) / height);
+        height = maxDimension;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+    img.src = objectUrl;
+  });
+}
+
 function findPhotoValidation(photoValidations, personId, choreId, dateKey) {
   return (photoValidations || []).find(
     v => v.childId === personId && v.choreId === choreId && v.date === dateKey
