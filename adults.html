@@ -1670,7 +1670,10 @@ let repasWeekOffset = 0;
         const status = document.createElement("span");
         status.className = "badge";
 
-        if (chore.repeatable) {
+        if (isChoreLockedForOthers(chore, person.id)) {
+          status.textContent = `Déjà fait par ${chore.completedTodayByName || chore.completedTodayBy}`;
+          right.appendChild(status);
+        } else if (chore.repeatable) {
           const count = state.repeatCounts[chore.id] || 0;
           status.textContent = count > 0 ? `Fait ${count}×` : "À faire";
 

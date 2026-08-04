@@ -419,6 +419,15 @@ function compressImageToBase64(file, maxDimension, quality) {
   });
 }
 
+// Une corvée non attribuée (assignedTo vide, visible par tout le monde)
+// devient "verrouillée" pour les autres dès qu'une personne l'a faite
+// aujourd'hui — voir chore.completedTodayBy, calculé côté n8n depuis le
+// Journal du jour.
+function isChoreLockedForOthers(chore, personId) {
+  const isUnassigned = !chore.assignedTo || chore.assignedTo.length === 0;
+  return isUnassigned && !!chore.completedTodayBy && chore.completedTodayBy !== personId;
+}
+
 function findPhotoValidation(photoValidations, personId, choreId, dateKey) {
   return (photoValidations || []).find(
     v => v.childId === personId && v.choreId === choreId && v.date === dateKey

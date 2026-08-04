@@ -766,7 +766,10 @@
         const status = document.createElement("span");
         status.className = "badge";
 
-        if (chore.photoRequired && !completed) {
+        if (isChoreLockedForOthers(chore, data.activeChildId)) {
+          status.textContent = `Déjà fait par ${chore.completedTodayByName || chore.completedTodayBy}`;
+          right.appendChild(status);
+        } else if (chore.photoRequired && !completed) {
           status.textContent = photoPending ? "📸 En attente de validation" : (validation && validation.status === "rejected" ? "❌ Refusée" : "À faire");
           right.appendChild(status);
 
