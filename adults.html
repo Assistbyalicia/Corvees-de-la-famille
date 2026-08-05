@@ -1569,7 +1569,7 @@ let repasWeekOffset = 0;
         const li = document.createElement("li");
 
         const left = document.createElement("span");
-        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+        left.textContent = `${chore.label} (+${chore.stars}⭐)${formatChoreIcons(chore)}`;
 
         const completed = state.completedChores.includes(chore.id);
         const status = document.createElement("span");
@@ -1689,7 +1689,7 @@ let repasWeekOffset = 0;
         const li = document.createElement("li");
 
         const left = document.createElement("span");
-        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+        left.textContent = `${chore.label} (+${chore.stars}⭐)${formatChoreIcons(chore)}`;
 
         const right = document.createElement("div");
 
@@ -1967,7 +1967,7 @@ let repasWeekOffset = 0;
           titleLine.style.alignItems = "center";
           titleLine.style.gap = "0.4rem";
           const strong = document.createElement("strong");
-          strong.textContent = chore.label;
+          strong.textContent = `${chore.label}${formatChoreIcons(chore)}`;
           const badge = document.createElement("span");
           badge.className = "badge";
           badge.textContent = `${chore.stars}⭐`;

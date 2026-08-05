@@ -631,6 +631,17 @@ async function postUpdateChoreSwappable(choreId, notSwappable) {
       });
 }
 
+// Petits sigles à afficher à côté du nom d'une corvée : 📸 si une preuve
+// photo est exigée, 🔄 si elle peut faire l'objet d'un troc (uniquement
+// pertinent pour une corvée attribuée à quelqu'un en particulier — une
+// corvée commune n'a pas de propriétaire à échanger).
+function formatChoreIcons(chore) {
+  let icons = "";
+  if (chore.photoRequired) icons += " 📸";
+  if (chore.assignedTo && chore.assignedTo.length > 0 && !chore.notSwappable) icons += " 🔄";
+  return icons;
+}
+
 // Liste des personnes assignées à une corvée aujourd'hui, en tenant compte
 // d'un échange APPROUVÉ (chore.swap.status === "approved") : celui qui l'a
 // proposée (fromPersonId) ne la voit plus, celui qui l'a reçue (toPersonId)

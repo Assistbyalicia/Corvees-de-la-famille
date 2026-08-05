@@ -761,7 +761,7 @@
         const li = document.createElement("li");
 
         const left = document.createElement("span");
-        left.textContent = `${chore.label} (+${chore.stars}⭐)`;
+        left.textContent = `${chore.label} (+${chore.stars}⭐)${formatChoreIcons(chore)}`;
 
         const right = document.createElement("div");
         right.appendChild(buildChoreTimerWidget(chore.id, `chore-timer-${chore.id}`));
