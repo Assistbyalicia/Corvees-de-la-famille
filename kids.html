@@ -872,17 +872,21 @@
         li.appendChild(left);
         li.appendChild(right);
 
-        // Échange de corvée : uniquement pour une corvée qui m'est
+        // Échange (troc) de corvée : uniquement pour une corvée qui m'est
         // spécifiquement attribuée (pas les corvées communes, déjà ouvertes
-        // à tous) et sans échange déjà en cours dessus.
-        if (chore.assignedTo && chore.assignedTo.includes(data.activeChildId)) {
+        // à tous), échangeable (pas notSwappable), et sans échange déjà en
+        // cours dessus. Un vrai troc : ma corvée contre une des siennes.
+        if (chore.assignedTo && chore.assignedTo.includes(data.activeChildId) && !chore.notSwappable) {
           li.style.flexWrap = "wrap";
           if (chore.swap && chore.swap.status === "pending" && chore.swap.fromPersonId === data.activeChildId) {
             const swapBadge = document.createElement("div");
             swapBadge.className = "small";
             swapBadge.style.width = "100%";
             const toPerson = [...(data.children || []), ...(data.adults || [])].find(p => p.id === chore.swap.toPersonId);
-            swapBadge.textContent = `🔄 Proposé à ${toPerson ? toPerson.name : chore.swap.toPersonId}, en attente de validation par un adulte.`;
+            const theirChore = (data.chores || []).find(
+              c => c.swap && c.swap.status === "pending" && c.swap.toPersonId === data.activeChildId && c.swap.fromPersonId === chore.swap.toPersonId
+            );
+            swapBadge.textContent = `🔄 Proposé à ${toPerson ? toPerson.name : chore.swap.toPersonId} contre « ${theirChore ? theirChore.label : "?"} », en attente de validation par un adulte.`;
             li.appendChild(swapBadge);
           } else if (!chore.swap) {
             const swapRow = document.createElement("div");
@@ -891,15 +895,40 @@
             swapRow.style.gap = "0.4rem";
             swapRow.style.marginTop = "0.3rem";
 
-            const select = document.createElement("select");
-            select.style.flex = "1";
-            const others = [...(data.children || []), ...(data.adults || [])].filter(p => p.id !== data.activeChildId);
+            const personSelect = document.createElement("select");
+            personSelect.style.flex = "1";
+            const choreSelect = document.createElement("select");
+            choreSelect.style.flex = "1";
+
+            const allPeople = [...(data.children || []), ...(data.adults || [])];
+
+            function choresOwnedByToday(personId) {
+              return (data.chores || []).filter(c =>
+                c.id !== chore.id && !c.notSwappable && !c.swap &&
+                getEffectiveAssignedTo(c).includes(personId)
+              );
+            }
+
+            function refreshChoreOptions() {
+              choreSelect.innerHTML = "";
+              const theirChores = choresOwnedByToday(personSelect.value);
+              theirChores.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.id;
+                opt.textContent = c.label;
+                choreSelect.appendChild(opt);
+              });
+              swapBtn.disabled = theirChores.length === 0;
+            }
+
+            const others = allPeople.filter(p => p.id !== data.activeChildId && choresOwnedByToday(p.id).length > 0);
             others.forEach(p => {
               const opt = document.createElement("option");
               opt.value = p.id;
               opt.textContent = p.name;
-              select.appendChild(opt);
+              personSelect.appendChild(opt);
             });
+            personSelect.addEventListener("change", refreshChoreOptions);
 
             const swapBtn = document.createElement("button");
             swapBtn.type = "button";
@@ -907,13 +936,20 @@
             swapBtn.textContent = "🔄 Échanger";
             swapBtn.disabled = others.length === 0;
             swapBtn.addEventListener("click", async () => {
-              await postProposeSwap(chore.id, data.activeChildId, select.value, todayKey);
-              chore.swap = { fromPersonId: data.activeChildId, toPersonId: select.value, status: "pending" };
+              const theirChoreId = choreSelect.value;
+              const toPersonId = personSelect.value;
+              await postProposeSwap(chore.id, theirChoreId, data.activeChildId, toPersonId, todayKey);
+              const theirChore = (data.chores || []).find(c => c.id === theirChoreId);
+              chore.swap = { fromPersonId: data.activeChildId, toPersonId, status: "pending" };
+              if (theirChore) theirChore.swap = { fromPersonId: toPersonId, toPersonId: data.activeChildId, status: "pending" };
               saveData(data);
               renderAll();
             });
 
-            swapRow.appendChild(select);
+            if (others.length > 0) refreshChoreOptions();
+
+            swapRow.appendChild(personSelect);
+            swapRow.appendChild(choreSelect);
             swapRow.appendChild(swapBtn);
             li.appendChild(swapRow);
           }

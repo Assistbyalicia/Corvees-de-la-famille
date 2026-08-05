@@ -2150,11 +2150,27 @@ let repasWeekOffset = 0;
         repeatableLabel.appendChild(repeatableCheckbox);
         repeatableLabel.appendChild(document.createTextNode("🔁 Plusieurs fois par jour"));
 
+        const notSwappableLabel = document.createElement("label");
+        notSwappableLabel.style.display = "flex";
+        notSwappableLabel.style.alignItems = "center";
+        notSwappableLabel.style.gap = "0.3rem";
+        const notSwappableCheckbox = document.createElement("input");
+        notSwappableCheckbox.type = "checkbox";
+        notSwappableCheckbox.checked = !!chore.notSwappable;
+        notSwappableCheckbox.addEventListener("change", async () => {
+          chore.notSwappable = notSwappableCheckbox.checked;
+          saveData(data);
+          await postUpdateChoreSwappable(chore.id, chore.notSwappable);
+        });
+        notSwappableLabel.appendChild(notSwappableCheckbox);
+        notSwappableLabel.appendChild(document.createTextNode("🚫 Ne peut pas être échangée"));
+
         right.appendChild(checkboxes);
         right.appendChild(selectFrequency);
         right.appendChild(weekdaysContainer);
         right.appendChild(photoRequiredLabel);
         right.appendChild(repeatableLabel);
+        right.appendChild(notSwappableLabel);
         right.appendChild(btn);
 
         li.appendChild(left);
@@ -2180,26 +2196,40 @@ let repasWeekOffset = 0;
       list.innerHTML = "";
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
-      const pending = (data.chores || []).filter(c => c.swap && c.swap.status === "pending");
+      const pendingChores = (data.chores || []).filter(c => c.swap && c.swap.status === "pending");
 
-      section.style.display = pending.length > 0 ? "" : "none";
-      if (pending.length === 0) return;
+      // Chaque troc apparaît sur DEUX corvées (la mienne, la sienne) avec des
+      // from/to inversés : on les regroupe en une seule ligne (sinon un même
+      // troc apparaîtrait deux fois), en gardant celle dont l'id est la plus
+      // petite comme représentante pour éviter le doublon inverse.
+      const pairs = [];
+      pendingChores.forEach(chore => {
+        const counterpart = pendingChores.find(
+          c => c.swap.fromPersonId === chore.swap.toPersonId && c.swap.toPersonId === chore.swap.fromPersonId
+        );
+        if (!counterpart) return; // troc orphelin (donnée incomplète) : on ignore plutôt que de planter l'affichage.
+        if (chore.id < counterpart.id) pairs.push([chore, counterpart]);
+      });
 
-      pending.forEach(chore => {
+      section.style.display = pairs.length > 0 ? "" : "none";
+      if (pairs.length === 0) return;
+
+      pairs.forEach(([mine, theirs]) => {
         const li = document.createElement("li");
-        const fromPerson = allPeople.find(p => p.id === chore.swap.fromPersonId);
-        const toPerson = allPeople.find(p => p.id === chore.swap.toPersonId);
+        const fromPerson = allPeople.find(p => p.id === mine.swap.fromPersonId);
+        const toPerson = allPeople.find(p => p.id === mine.swap.toPersonId);
 
         const left = document.createElement("span");
-        left.textContent = `« ${chore.label} » : ${fromPerson ? fromPerson.name : chore.swap.fromPersonId} → ${toPerson ? toPerson.name : chore.swap.toPersonId}`;
+        left.textContent = `${fromPerson ? fromPerson.name : mine.swap.fromPersonId} donne « ${mine.label} » ↔ ${toPerson ? toPerson.name : mine.swap.toPersonId} donne « ${theirs.label} »`;
 
         const actions = document.createElement("div");
         const approveBtn = document.createElement("button");
         approveBtn.className = "btn-primary";
         approveBtn.textContent = "Approuver";
         approveBtn.addEventListener("click", async () => {
-          chore.swap.status = "approved";
-          await postApproveSwap(chore.id);
+          mine.swap.status = "approved";
+          theirs.swap.status = "approved";
+          await postApproveSwap(mine.id);
           saveData(data);
           refreshRenders();
         });
@@ -2209,8 +2239,9 @@ let repasWeekOffset = 0;
         rejectBtn.style.marginLeft = "0.4rem";
         rejectBtn.textContent = "Refuser";
         rejectBtn.addEventListener("click", async () => {
-          delete chore.swap;
-          await postRejectSwap(chore.id);
+          delete mine.swap;
+          delete theirs.swap;
+          await postRejectSwap(mine.id);
           saveData(data);
           refreshRenders();
         });

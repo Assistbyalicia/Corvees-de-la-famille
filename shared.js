@@ -590,29 +590,45 @@ async function postUpdateChoreRepeatable(choreId, repeatable) {
       });
 }
 
-// action: "propose_swap" — un enfant propose qu'une AUTRE personne fasse sa
-// corvée du jour à sa place (valable pour la date donnée uniquement, soumis
-// à validation adulte — voir postApproveSwap/postRejectSwap).
-async function postProposeSwap(choreId, fromPersonId, toPersonId, date) {
+// action: "propose_swap" — un enfant propose un vrai troc pour aujourd'hui
+// uniquement : sa corvée (choreId) contre celle d'une autre personne
+// (theirChoreId), soumis à validation adulte (voir postApproveSwap/
+// postRejectSwap). Les DEUX corvées sont mises à jour côté n8n (liées via
+// "Échange corvée liée"), pour qu'approuver/refuser affecte le troc en entier
+// d'un seul geste plutôt que la moitié seulement.
+async function postProposeSwap(choreId, theirChoreId, fromPersonId, toPersonId, date) {
   return postToServer({
         action: "propose_swap",
         choreId,
+        theirChoreId,
         fromPersonId,
         toPersonId,
         date: date || getTodayKey()
       });
 }
 
-// action: "approve_swap" — un adulte valide l'échange proposé : la corvée
-// est effectivement réattribuée à toPersonId pour la journée en cours (voir
-// getEffectiveAssignedTo).
+// action: "approve_swap" — un adulte valide le troc : les DEUX corvées sont
+// effectivement échangées pour la journée en cours (voir
+// getEffectiveAssignedTo), quel que soit celle des deux corvées passée en
+// choreId (n8n retrouve l'autre via "Échange corvée liée").
 async function postApproveSwap(choreId) {
   return postToServer({ action: "approve_swap", choreId });
 }
 
-// action: "reject_swap" — un adulte refuse l'échange proposé, qui est effacé.
+// action: "reject_swap" — un adulte refuse le troc, qui est effacé des DEUX
+// corvées concernées.
 async function postRejectSwap(choreId) {
   return postToServer({ action: "reject_swap", choreId });
+}
+
+// action: "update_chore_swappable" — autorise/interdit l'échange pour une
+// corvée donnée (certaines corvées ne se prêtent pas à un troc).
+async function postUpdateChoreSwappable(choreId, notSwappable) {
+  return postToServer({
+        action: "update_chore_swappable",
+        choreId,
+        notSwappable: !!notSwappable
+      });
 }
 
 // Liste des personnes assignées à une corvée aujourd'hui, en tenant compte
