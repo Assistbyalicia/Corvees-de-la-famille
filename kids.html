@@ -94,6 +94,8 @@
     <div class="subnav" id="quetes-subnav">
       <button data-subtab="quetes" class="btn-secondary">Mes quêtes</button>
       <button data-subtab="recap" class="btn-secondary">🏆 Récap</button>
+      <button data-subtab="semaine" class="btn-secondary">📅 Cette semaine</button>
+      <button data-subtab="historique" class="btn-secondary">📖 Mon historique</button>
     </div>
 
     <div data-subpanel="quetes">
@@ -164,6 +166,14 @@
       <p class="small">Total des étoiles gagnées ces 7 derniers jours.</p>
       <div id="recap-table"></div>
     </div>
+    </div>
+
+    <div data-subpanel="semaine">
+      <div id="week-schedule"></div>
+    </div>
+
+    <div data-subpanel="historique">
+      <div id="history-list"></div>
     </div>
   </div>
 
@@ -390,16 +400,15 @@
         badge.textContent = "⭐ 0 étoiles";
         return;
       }
-      const childState = getPersonDayState(data.activeChildId);
-      badge.textContent = `⭐ ${childState.stars} étoiles`;
+      badge.textContent = `⭐ ${getWalletBalance(data.activeChildId)} étoiles`;
     }
 
     function renderStreak() {
       const badge = document.getElementById("streak-badge");
       if (!badge) return;
 
-      const days = (data.weeklyRecap && data.weeklyRecap.days) || [];
-      const streak = data.activeChildId ? computeStreak(days, data.activeChildId) : 0;
+      const child = (data.children || []).find(c => c.id === data.activeChildId);
+      const streak = child ? (child.currentStreak || 0) : 0;
 
       if (streak >= 2) {
         badge.textContent = `🔥 ${streak} jours d'affilée`;
@@ -793,7 +802,7 @@
             if (!state.completedChores.includes(chore.id)) {
               state.completedChores.push(chore.id);
             }
-            state.stars += chore.stars;
+            adjustWallet(data.activeChildId, chore.stars);
             showStarPop(againBtn, `+${chore.stars}⭐`);
             saveData(data);
             renderAll();
@@ -813,8 +822,7 @@
               const index = state.completedChores.indexOf(chore.id);
               if (index !== -1) state.completedChores.splice(index, 1);
             }
-            state.stars -= chore.stars;
-            if (state.stars < 0) state.stars = 0;
+            adjustWallet(data.activeChildId, -chore.stars);
             saveData(data);
             renderAll();
             await postChoreAction(data.activeChildId, chore.id, "cancel");
@@ -837,7 +845,7 @@
 
             if (isNowCompleted) {
               state.completedChores.push(chore.id);
-              state.stars += chore.stars;
+              adjustWallet(data.activeChildId, chore.stars);
               showStarPop(btn, `+${chore.stars}⭐`);
               await postChoreAction(data.activeChildId, chore.id, "complete");
 
@@ -849,8 +857,7 @@
               }
             } else {
               state.completedChores.splice(index, 1);
-              state.stars -= chore.stars;
-              if (state.stars < 0) state.stars = 0;
+              adjustWallet(data.activeChildId, -chore.stars);
               await postChoreAction(data.activeChildId, chore.id, "cancel");
             }
 
@@ -864,6 +871,54 @@
 
         li.appendChild(left);
         li.appendChild(right);
+
+        // Échange de corvée : uniquement pour une corvée qui m'est
+        // spécifiquement attribuée (pas les corvées communes, déjà ouvertes
+        // à tous) et sans échange déjà en cours dessus.
+        if (chore.assignedTo && chore.assignedTo.includes(data.activeChildId)) {
+          li.style.flexWrap = "wrap";
+          if (chore.swap && chore.swap.status === "pending" && chore.swap.fromPersonId === data.activeChildId) {
+            const swapBadge = document.createElement("div");
+            swapBadge.className = "small";
+            swapBadge.style.width = "100%";
+            const toPerson = [...(data.children || []), ...(data.adults || [])].find(p => p.id === chore.swap.toPersonId);
+            swapBadge.textContent = `🔄 Proposé à ${toPerson ? toPerson.name : chore.swap.toPersonId}, en attente de validation par un adulte.`;
+            li.appendChild(swapBadge);
+          } else if (!chore.swap) {
+            const swapRow = document.createElement("div");
+            swapRow.style.width = "100%";
+            swapRow.style.display = "flex";
+            swapRow.style.gap = "0.4rem";
+            swapRow.style.marginTop = "0.3rem";
+
+            const select = document.createElement("select");
+            select.style.flex = "1";
+            const others = [...(data.children || []), ...(data.adults || [])].filter(p => p.id !== data.activeChildId);
+            others.forEach(p => {
+              const opt = document.createElement("option");
+              opt.value = p.id;
+              opt.textContent = p.name;
+              select.appendChild(opt);
+            });
+
+            const swapBtn = document.createElement("button");
+            swapBtn.type = "button";
+            swapBtn.className = "btn-secondary";
+            swapBtn.textContent = "🔄 Échanger";
+            swapBtn.disabled = others.length === 0;
+            swapBtn.addEventListener("click", async () => {
+              await postProposeSwap(chore.id, data.activeChildId, select.value, todayKey);
+              chore.swap = { fromPersonId: data.activeChildId, toPersonId: select.value, status: "pending" };
+              saveData(data);
+              renderAll();
+            });
+
+            swapRow.appendChild(select);
+            swapRow.appendChild(swapBtn);
+            li.appendChild(swapRow);
+          }
+        }
+
         list.appendChild(li);
       });
 
@@ -930,6 +985,7 @@
       }
 
       const childState = getPersonDayState(data.activeChildId);
+      const balance = getWalletBalance(data.activeChildId);
 
       const rewardsForChild = (data.rewards || []).filter(reward => {
         if (reward.pending) return false;
@@ -939,6 +995,11 @@
 
       rewardsForChild.forEach(reward => {
         const li = document.createElement("li");
+        li.style.flexDirection = "column";
+        li.style.alignItems = "stretch";
+
+        const topRow = document.createElement("div");
+        topRow.className = "header-row";
 
         const left = document.createElement("span");
         left.textContent = `${reward.label} (${reward.cost}⭐)`;
@@ -948,15 +1009,15 @@
         const btn = document.createElement("button");
         btn.className = purchased ? "btn-secondary" : "btn-primary";
         btn.textContent = purchased ? "Annuler" : "Acheter";
-        btn.disabled = !purchased && childState.stars < reward.cost;
+        btn.disabled = !purchased && balance < reward.cost;
 
         btn.addEventListener("click", async () => {
           const state = getPersonDayState(data.activeChildId);
           const index = state.purchasedRewards.indexOf(reward.id);
 
           if (index === -1) {
-            if (state.stars < reward.cost) return;
-            state.stars -= reward.cost;
+            if (getWalletBalance(data.activeChildId) < reward.cost) return;
+            adjustWallet(data.activeChildId, -reward.cost);
             state.purchasedRewards.push(reward.id);
             showConfetti();
             await postRewardAction(data.activeChildId, reward.id, "purchase");
@@ -964,7 +1025,7 @@
             renderAll();
             alert(`${reward.label} débloquée pour ${getActiveChildName()} !`);
           } else {
-            state.stars += reward.cost;
+            adjustWallet(data.activeChildId, reward.cost);
             state.purchasedRewards.splice(index, 1);
             await postRewardAction(data.activeChildId, reward.id, "cancel_purchase");
             saveData(data);
@@ -972,8 +1033,31 @@
           }
         });
 
-        li.appendChild(left);
-        li.appendChild(btn);
+        topRow.appendChild(left);
+        topRow.appendChild(btn);
+        li.appendChild(topRow);
+
+        // Objectif d'épargne : tant que la récompense n'est pas achetable
+        // avec le solde actuel, on montre à quel point on s'en approche —
+        // utile surtout pour les récompenses chères, qui se méritent sur
+        // plusieurs jours (voir getWalletBalance, cumulatif).
+        if (!purchased && balance < reward.cost) {
+          const ratio = Math.max(0, Math.min(100, Math.round((balance / reward.cost) * 100)));
+          const bar = document.createElement("div");
+          bar.className = "progress-bar";
+          bar.style.marginTop = "0.3rem";
+          const fill = document.createElement("div");
+          fill.className = "progress-fill";
+          fill.style.width = `${ratio}%`;
+          bar.appendChild(fill);
+          li.appendChild(bar);
+
+          const progressLabel = document.createElement("span");
+          progressLabel.className = "small";
+          progressLabel.textContent = `${balance} / ${reward.cost}⭐`;
+          li.appendChild(progressLabel);
+        }
+
         list.appendChild(li);
       });
 
@@ -1088,6 +1172,10 @@
       renderOfflineBadge(data);
       renderAll();
       renderWeeklyRecapTable("recap-table", data, data.children || [], data.activeChildId);
+      if (data.activeChildId) {
+        renderWeeklySchedule("week-schedule", data, data.activeChildId);
+        renderDailyHistoryList("history-list", data, data.activeChildId);
+      }
     }
 
     // Écouteurs branchés une seule fois (sinon un clic déclencherait l'action

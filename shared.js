@@ -114,6 +114,8 @@ const defaultData = {
   pendingActions: [],
   photoValidations: [],
   todayCompletionsByPerson: {},
+  dailyHistoryByPerson: {},
+  wallet: {},
   activeChildId: null,
   activeAdultId: null,
   state: {}
@@ -159,6 +161,46 @@ function getPersonDayState(personId) {
     data.state[personId][dayKey].repeatCounts = {};
   }
   return data.state[personId][dayKey];
+}
+
+// --- Porte-monnaie (solde d'étoiles disponibles) --------------------------
+// Contrairement à completedChores/repeatCounts/purchasedRewards (qui doivent
+// repartir à zéro chaque jour, voir getPersonDayState ci-dessus), le solde
+// d'étoiles doit lui persister d'un jour à l'autre pour qu'économiser pour
+// une récompense chère (ex. 20⭐) ait un sens. On le sort donc de
+// data.state (qui est par jour) vers data.wallet (par personne, sans notion
+// de jour).
+function getWalletBalance(personId) {
+  if (!data.wallet) data.wallet = {};
+  return data.wallet[personId] || 0;
+}
+
+function setWalletBalance(personId, value) {
+  if (!data.wallet) data.wallet = {};
+  data.wallet[personId] = Math.max(0, value);
+  saveData(data);
+}
+
+function adjustWallet(personId, delta) {
+  setWalletBalance(personId, getWalletBalance(personId) + delta);
+}
+
+// Recale le solde local sur la vérité serveur (person.walletStars, calculée
+// par n8n depuis tout le Journal) SANS jamais faire redescendre l'affichage :
+// une action qui vient d'être envoyée par CET appareil est déjà reflétée
+// dans le solde local, mais peut ne pas encore l'être côté Notion/n8n au
+// moment où cette config fraîche est reçue (latence d'écriture). Prendre le
+// max() des deux évite ce recul temporaire tout en récupérant les gains
+// faits sur un AUTRE appareil (ou un ajustement manuel dans Notion) dès que
+// le serveur les reflète.
+function reconcileWallets(freshData) {
+  if (!freshData.wallet) freshData.wallet = {};
+  const allPeople = [...(freshData.children || []), ...(freshData.adults || [])];
+  allPeople.forEach(person => {
+    const local = freshData.wallet[person.id] || 0;
+    const server = person.walletStars || 0;
+    freshData.wallet[person.id] = Math.max(local, server);
+  });
 }
 
 async function fetchRemoteConfig() {
@@ -220,8 +262,16 @@ async function loadAppData() {
       gardeBlocks: config.gardeBlocks || [],
       personRoster: config.personRoster || [],
       todayCompletionsByPerson: config.todayCompletionsByPerson || {},
+      dailyHistoryByPerson: config.dailyHistoryByPerson || {},
       offline: false
     };
+    // Porte-monnaie : on ne prend jamais telle quelle la valeur serveur
+    // (person.walletStars, calculée à partir de tout le Journal), on la
+    // combine avec le solde local via un max() — voir reconcileWallets().
+    // Sans ça, une action tout juste envoyée (pas encore répercutée par
+    // Notion/n8n au moment de CE rafraîchissement) ferait redescendre le
+    // solde affiché avant de remonter au rafraîchissement suivant.
+    reconcileWallets(merged);
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
     // créée depuis l'appli perd son marquage "local" dès qu'elle apparaît dans
     // Notion (elle est alors renvoyée telle quelle par la config, sans _source).
@@ -434,11 +484,16 @@ function getServerDayState(personId) {
     repeatCounts[choreId] = (repeatCounts[choreId] || 0) + 1;
     if (!completedChores.includes(choreId)) completedChores.push(choreId);
   });
+  const allPeople = [...(data.children || []), ...(data.adults || [])];
+  const person = allPeople.find(p => p.id === personId);
   return {
     completedChores,
     repeatCounts,
     purchasedRewards: [],
-    stars: Math.max(0, entry.netStars)
+    // Le porte-monnaie (cumulatif, voir reconcileWallets) plutôt que le solde
+    // du seul jour : c'est ce que l'admin veut voir sur le tableau de bord
+    // d'un enfant, pas juste ce qu'il a gagné net aujourd'hui.
+    stars: person ? Math.max(getWalletBalance(personId), person.walletStars || 0) : getWalletBalance(personId)
   };
 }
 
@@ -479,7 +534,7 @@ function reconcileApprovedPhotoChores(personId) {
     if (!state.completedChores.includes(v.choreId)) {
       const chore = (data.chores || []).find(c => c.id === v.choreId);
       state.completedChores.push(v.choreId);
-      state.stars += chore ? chore.stars : 0;
+      adjustWallet(personId, chore ? chore.stars : 0);
     }
     changed = true;
   });
@@ -533,6 +588,45 @@ async function postUpdateChoreRepeatable(choreId, repeatable) {
         choreId,
         repeatable: !!repeatable
       });
+}
+
+// action: "propose_swap" — un enfant propose qu'une AUTRE personne fasse sa
+// corvée du jour à sa place (valable pour la date donnée uniquement, soumis
+// à validation adulte — voir postApproveSwap/postRejectSwap).
+async function postProposeSwap(choreId, fromPersonId, toPersonId, date) {
+  return postToServer({
+        action: "propose_swap",
+        choreId,
+        fromPersonId,
+        toPersonId,
+        date: date || getTodayKey()
+      });
+}
+
+// action: "approve_swap" — un adulte valide l'échange proposé : la corvée
+// est effectivement réattribuée à toPersonId pour la journée en cours (voir
+// getEffectiveAssignedTo).
+async function postApproveSwap(choreId) {
+  return postToServer({ action: "approve_swap", choreId });
+}
+
+// action: "reject_swap" — un adulte refuse l'échange proposé, qui est effacé.
+async function postRejectSwap(choreId) {
+  return postToServer({ action: "reject_swap", choreId });
+}
+
+// Liste des personnes assignées à une corvée aujourd'hui, en tenant compte
+// d'un échange APPROUVÉ (chore.swap.status === "approved") : celui qui l'a
+// proposée (fromPersonId) ne la voit plus, celui qui l'a reçue (toPersonId)
+// la voit à sa place. Un échange encore "en attente" ne change rien
+// (l'adulte n'a pas encore validé) : les deux le voient, avec juste un badge
+// d'information en plus côté UI.
+function getEffectiveAssignedTo(chore) {
+  const base = chore.assignedTo || [];
+  if (!chore.swap || chore.swap.status !== "approved") return base;
+  return base
+    .filter(id => id !== chore.swap.fromPersonId)
+    .concat(base.includes(chore.swap.fromPersonId) ? [chore.swap.toPersonId] : []);
 }
 
 // action: "update_chore_frequency" — change la fréquence (et les jours, si
@@ -1704,7 +1798,8 @@ function getChildChoresToday(chores, childId, childName, gardeOverrides, gardeBl
 
   return (chores || []).filter(chore => {
     if (!isChoreVisibleToday(chore)) return false;
-    if (chore.assignedTo && chore.assignedTo.length > 0 && !chore.assignedTo.includes(childId)) {
+    const effectiveAssignedTo = getEffectiveAssignedTo(chore);
+    if (effectiveAssignedTo.length > 0 && !effectiveAssignedTo.includes(childId)) {
       return false;
     }
     return true;
@@ -1846,6 +1941,161 @@ function renderWeeklyRecapTable(containerId, data, people, highlightPersonId) {
   table.appendChild(tfoot);
 
   container.appendChild(table);
+}
+
+// "Aujourd'hui"/"Hier"/"lundi 4 août" selon la distance au jour présent —
+// utilisé par la vue "Mon historique" pour que les jours récents soient
+// immédiatement reconnaissables sans calcul mental.
+function formatHistoryDayLabel(dateKey) {
+  const d = new Date(`${dateKey}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today - d) / 86400000);
+  const dayFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
+  if (diffDays === 0) return `Aujourd'hui (${dayFmt.format(d)})`;
+  if (diffDays === 1) return `Hier (${dayFmt.format(d)})`;
+  const dowFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long" });
+  return `${dowFmt.format(d)} ${dayFmt.format(d)}`;
+}
+
+// Vue "Mon historique" : liste jour par jour (le plus récent en premier) des
+// corvées faites, primes de série et récompenses achetées par personId, à
+// partir de data.dailyHistoryByPerson (30 jours, calculé côté n8n — voir
+// Appli corvées.json, section "6bis").
+function renderDailyHistoryList(containerId, data, personId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+
+  const days = (data.dailyHistoryByPerson && data.dailyHistoryByPerson[personId]) || [];
+  if (days.length === 0) {
+    const p = document.createElement("p");
+    p.className = "small";
+    p.textContent = "Pas encore d'historique.";
+    container.appendChild(p);
+    return;
+  }
+
+  days.forEach(day => {
+    const card = document.createElement("div");
+    card.className = "section";
+    card.style.marginBottom = "0.6rem";
+
+    const header = document.createElement("div");
+    header.className = "header-row";
+    const title = document.createElement("strong");
+    title.textContent = formatHistoryDayLabel(day.date);
+    const net = document.createElement("span");
+    net.className = "badge";
+    const netStars = (day.starsEarned || 0) - (day.starsSpent || 0);
+    net.textContent = `${netStars >= 0 ? "+" : ""}${netStars}⭐`;
+    header.appendChild(title);
+    header.appendChild(net);
+    card.appendChild(header);
+
+    const lines = [];
+    (day.choresDone || []).forEach(c => {
+      lines.push(`✅ ${c.label}${c.count > 1 ? ` ×${c.count}` : ""} (+${c.stars}⭐)`);
+    });
+    (day.bonuses || []).forEach(b => {
+      lines.push(`${b.label} (+${b.stars}⭐)`);
+    });
+    (day.rewardsPurchased || []).forEach(r => {
+      lines.push(`🛍️ ${r.label} (-${r.cost}⭐)`);
+    });
+
+    if (lines.length === 0) {
+      const p = document.createElement("p");
+      p.className = "small";
+      p.style.margin = "0";
+      p.textContent = "Rien ce jour-là.";
+      card.appendChild(p);
+    } else {
+      const ul = document.createElement("ul");
+      ul.className = "list";
+      lines.forEach(text => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+// Une corvée est-elle prévue à une date précise (pas forcément aujourd'hui) ?
+// Même règle que isChoreVisibleToday, généralisée à n'importe quel jour, pour
+// la vue "Cette semaine" (qui doit afficher aussi les jours passés/à venir).
+function isChoreScheduledOnDate(chore, dateObj) {
+  const frequency = chore.frequency || "quotidien";
+  if (frequency !== "hebdomadaire") return true;
+  if (!chore.weeklyDays || chore.weeklyDays.length === 0) return true;
+  return chore.weeklyDays.includes(dateObj.getDay());
+}
+
+// Vue "Cette semaine" : grille des 7 jours (lundi à dimanche) de la semaine
+// en cours, avec les corvées prévues chaque jour pour personId. Les jours
+// passés (et aujourd'hui) affichent ✅/⬜ selon que la corvée a été faite
+// (data.dailyHistoryByPerson pour les jours passés ; en plus l'état local du
+// jour pour aujourd'hui, qui peut être en avance sur le calcul serveur juste
+// après une action sur CET appareil).
+function renderWeeklySchedule(containerId, data, personId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+
+  const chores = (data.chores || []).filter(
+    chore => !chore.assignedTo || chore.assignedTo.length === 0 || chore.assignedTo.includes(personId)
+  );
+
+  const historyDays = (data.dailyHistoryByPerson && data.dailyHistoryByPerson[personId]) || [];
+  const historyByDate = {};
+  historyDays.forEach(d => { historyByDate[d.date] = d; });
+
+  const todayKey = getTodayKey();
+  const localDoneIds = new Set((getPersonDayState(personId).completedChores) || []);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dowFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long" });
+  const dayFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+  getWeekDates(0).forEach(dateObj => {
+    const dateKey = gardeDateKey(dateObj);
+    const isToday = dateKey === todayKey;
+    const isPastOrToday = dateKey <= todayKey;
+    const scheduled = chores.filter(c => isChoreScheduledOnDate(c, dateObj));
+
+    const card = document.createElement("div");
+    card.className = "section";
+    card.style.marginBottom = "0.6rem";
+    if (isToday) card.style.borderColor = "var(--color-primary)";
+
+    const title = document.createElement("strong");
+    title.textContent = `${dowFmt.format(dateObj)} ${dayFmt.format(dateObj)}${isToday ? " (aujourd'hui)" : ""}`;
+    card.appendChild(title);
+
+    const dayHistory = historyByDate[dateKey];
+    const doneIds = new Set((dayHistory ? dayHistory.choresDone : []).map(c => c.choreId));
+    if (isToday) localDoneIds.forEach(id => doneIds.add(id));
+
+    const ul = document.createElement("ul");
+    ul.className = "list";
+    scheduled.forEach(chore => {
+      const li = document.createElement("li");
+      const mark = isPastOrToday ? (doneIds.has(chore.id) ? "✅" : "⬜") : "•";
+      li.textContent = `${mark} ${chore.label} (${chore.stars}⭐)`;
+      ul.appendChild(li);
+    });
+    if (scheduled.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "Rien de prévu.";
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+    container.appendChild(card);
+  });
 }
 
 // Câble un jeu d'onglets partagé (.tab-btn / .tab-panel, voir shared.css).

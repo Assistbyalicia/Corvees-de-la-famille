@@ -228,6 +228,12 @@
       </div>
 
       <div data-subpanel="corvees-libres">
+      <div class="section" id="pending-swaps-section" style="display:none;">
+        <h2>🔄 Échanges de corvées en attente</h2>
+        <p class="small">Un enfant propose qu'une autre personne fasse sa corvée du jour à sa place.</p>
+        <ul class="list" id="pending-swaps-list"></ul>
+      </div>
+
       <div class="section">
         <h2>Corvées non attribuées</h2>
         <p class="small">Corvées visibles par tout le monde faute d'assignation précise. Coche une ou plusieurs personnes pour les leur attribuer.</p>
@@ -656,7 +662,7 @@
         const tdStars = document.createElement("td");
         tdStars.textContent = `${state.stars}⭐`;
 
-        const streak = computeStreak((data.weeklyRecap && data.weeklyRecap.days) || [], child.id);
+        const streak = child.currentStreak || 0;
         const tdStreak = document.createElement("td");
         tdStreak.textContent = streak >= 2 ? `🔥 ${streak}` : "–";
 
@@ -1582,6 +1588,26 @@ let repasWeekOffset = 0;
       }
 
       container.appendChild(list);
+
+      const weekTitle = document.createElement("p");
+      weekTitle.className = "small";
+      weekTitle.style.margin = "0.75rem 0 0.25rem";
+      weekTitle.textContent = "📅 Cette semaine :";
+      container.appendChild(weekTitle);
+      const weekContainer = document.createElement("div");
+      container.appendChild(weekContainer);
+      weekContainer.id = "child-detail-week-schedule";
+      renderWeeklySchedule("child-detail-week-schedule", data, child.id);
+
+      const historyTitle = document.createElement("p");
+      historyTitle.className = "small";
+      historyTitle.style.margin = "0.75rem 0 0.25rem";
+      historyTitle.textContent = "📖 Historique :";
+      container.appendChild(historyTitle);
+      const historyContainer = document.createElement("div");
+      container.appendChild(historyContainer);
+      historyContainer.id = "child-detail-history-list";
+      renderDailyHistoryList("child-detail-history-list", data, child.id);
     }
 
     function renderAdultsPicker() {
@@ -1630,8 +1656,9 @@ let repasWeekOffset = 0;
 
       const choresForPerson = (data.chores || []).filter(chore => {
         if (!isChoreVisibleToday(chore)) return false;
-        if (chore.assignedTo && chore.assignedTo.length > 0) {
-          return chore.assignedTo.includes(person.id);
+        const effectiveAssignedTo = getEffectiveAssignedTo(chore);
+        if (effectiveAssignedTo.length > 0) {
+          return effectiveAssignedTo.includes(person.id);
         }
         // Si pas d'assignation explicite, on considère que c'est visible pour les adultes
         return true;
@@ -1645,13 +1672,14 @@ let repasWeekOffset = 0;
       const completionRatio =
         totalChores === 0 ? 0 : Math.round((completedCount / totalChores) * 100);
 
-      const streak = computeStreak((data.weeklyRecap && data.weeklyRecap.days) || [], person.id);
+      const streak = person.currentStreak || 0;
+      const balance = getWalletBalance(person.id);
 
       const summary = document.createElement("p");
       summary.className = "small";
       summary.textContent =
         `${completedCount}/${totalChores} corvées faites ` +
-        `(${completionRatio}%), ${state.stars}⭐.` +
+        `(${completionRatio}%), ${balance}⭐.` +
         (streak >= 2 ? ` 🔥 ${streak} jours d'affilée.` : "");
 
       const list = document.createElement("ul");
@@ -1686,7 +1714,7 @@ let repasWeekOffset = 0;
             if (!personState.completedChores.includes(chore.id)) {
               personState.completedChores.push(chore.id);
             }
-            personState.stars += chore.stars;
+            adjustWallet(person.id, chore.stars);
             saveData(data);
             renderAdultsSections();
             await postChoreAction(person.id, chore.id, "complete");
@@ -1705,8 +1733,7 @@ let repasWeekOffset = 0;
               const idx = personState.completedChores.indexOf(chore.id);
               if (idx !== -1) personState.completedChores.splice(idx, 1);
             }
-            personState.stars -= chore.stars;
-            if (personState.stars < 0) personState.stars = 0;
+            adjustWallet(person.id, -chore.stars);
             saveData(data);
             renderAdultsSections();
             await postChoreAction(person.id, chore.id, "cancel");
@@ -1734,7 +1761,7 @@ let repasWeekOffset = 0;
 
             if (isNowCompleted) {
               personState.completedChores.push(chore.id);
-              personState.stars += chore.stars;
+              adjustWallet(person.id, chore.stars);
               await postChoreAction(person.id, chore.id, "complete");
 
               if ((chore.frequency || "quotidien") === "ponctuel") {
@@ -1745,8 +1772,7 @@ let repasWeekOffset = 0;
               }
             } else {
               personState.completedChores.splice(index, 1);
-              personState.stars -= chore.stars;
-              if (personState.stars < 0) personState.stars = 0;
+              adjustWallet(person.id, -chore.stars);
               await postChoreAction(person.id, chore.id, "cancel");
             }
 
@@ -1784,6 +1810,11 @@ let repasWeekOffset = 0;
 
       rewardsForPerson.forEach(reward => {
         const li = document.createElement("li");
+        li.style.flexDirection = "column";
+        li.style.alignItems = "stretch";
+
+        const topRow = document.createElement("div");
+        topRow.className = "header-row";
 
         const left = document.createElement("span");
         left.textContent = `${reward.label} (${reward.cost}⭐)`;
@@ -1793,19 +1824,19 @@ let repasWeekOffset = 0;
         const btn = document.createElement("button");
         btn.className = purchased ? "btn-secondary" : "btn-primary";
         btn.textContent = purchased ? "Annuler" : "Acheter";
-        btn.disabled = !purchased && state.stars < reward.cost;
+        btn.disabled = !purchased && balance < reward.cost;
 
         btn.addEventListener("click", async () => {
           const personState = getPersonDayState(person.id);
           const index = personState.purchasedRewards.indexOf(reward.id);
 
           if (index === -1) {
-            if (personState.stars < reward.cost) return;
-            personState.stars -= reward.cost;
+            if (getWalletBalance(person.id) < reward.cost) return;
+            adjustWallet(person.id, -reward.cost);
             personState.purchasedRewards.push(reward.id);
             await postRewardAction(person.id, reward.id, "purchase");
           } else {
-            personState.stars += reward.cost;
+            adjustWallet(person.id, reward.cost);
             personState.purchasedRewards.splice(index, 1);
             await postRewardAction(person.id, reward.id, "cancel_purchase");
           }
@@ -1814,8 +1845,27 @@ let repasWeekOffset = 0;
           renderAdultsSections();
         });
 
-        li.appendChild(left);
-        li.appendChild(btn);
+        topRow.appendChild(left);
+        topRow.appendChild(btn);
+        li.appendChild(topRow);
+
+        if (!purchased && balance < reward.cost) {
+          const ratio = Math.max(0, Math.min(100, Math.round((balance / reward.cost) * 100)));
+          const bar = document.createElement("div");
+          bar.className = "progress-bar";
+          bar.style.marginTop = "0.3rem";
+          const fill = document.createElement("div");
+          fill.className = "progress-fill";
+          fill.style.width = `${ratio}%`;
+          bar.appendChild(fill);
+          li.appendChild(bar);
+
+          const progressLabel = document.createElement("span");
+          progressLabel.className = "small";
+          progressLabel.textContent = `${balance} / ${reward.cost}⭐`;
+          li.appendChild(progressLabel);
+        }
+
         rewardsList.appendChild(li);
       });
 
@@ -2121,6 +2171,57 @@ let repasWeekOffset = 0;
 
     function renderUnassignedChoresList() {
       renderChoresList(chore => !chore.assignedTo || chore.assignedTo.length === 0, "unassigned-chores-list");
+    }
+
+    function renderPendingSwapsList() {
+      const section = document.getElementById("pending-swaps-section");
+      const list = document.getElementById("pending-swaps-list");
+      if (!section || !list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const pending = (data.chores || []).filter(c => c.swap && c.swap.status === "pending");
+
+      section.style.display = pending.length > 0 ? "" : "none";
+      if (pending.length === 0) return;
+
+      pending.forEach(chore => {
+        const li = document.createElement("li");
+        const fromPerson = allPeople.find(p => p.id === chore.swap.fromPersonId);
+        const toPerson = allPeople.find(p => p.id === chore.swap.toPersonId);
+
+        const left = document.createElement("span");
+        left.textContent = `« ${chore.label} » : ${fromPerson ? fromPerson.name : chore.swap.fromPersonId} → ${toPerson ? toPerson.name : chore.swap.toPersonId}`;
+
+        const actions = document.createElement("div");
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "btn-primary";
+        approveBtn.textContent = "Approuver";
+        approveBtn.addEventListener("click", async () => {
+          chore.swap.status = "approved";
+          await postApproveSwap(chore.id);
+          saveData(data);
+          refreshRenders();
+        });
+
+        const rejectBtn = document.createElement("button");
+        rejectBtn.className = "btn-secondary";
+        rejectBtn.style.marginLeft = "0.4rem";
+        rejectBtn.textContent = "Refuser";
+        rejectBtn.addEventListener("click", async () => {
+          delete chore.swap;
+          await postRejectSwap(chore.id);
+          saveData(data);
+          refreshRenders();
+        });
+
+        actions.appendChild(approveBtn);
+        actions.appendChild(rejectBtn);
+
+        li.appendChild(left);
+        li.appendChild(actions);
+        list.appendChild(li);
+      });
     }
 
     function renderRewardsList() {
@@ -2855,6 +2956,7 @@ let repasWeekOffset = 0;
         renderAdultsSections();
         renderChoresList();
         renderUnassignedChoresList();
+        renderPendingSwapsList();
         renderChoreHistory();
         renderRewardsList();
         renderProposedRewardsList();
