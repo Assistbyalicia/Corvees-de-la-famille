@@ -2145,10 +2145,11 @@ function isChoreScheduledOnDate(chore, dateObj) {
 // (data.dailyHistoryByPerson pour les jours passés ; en plus l'état local du
 // jour pour aujourd'hui, qui peut être en avance sur le calcul serveur juste
 // après une action sur CET appareil).
-function renderWeeklySchedule(containerId, data, personId) {
+function renderWeeklySchedule(containerId, data, personId, options) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = "";
+  const skipToday = !!(options && options.skipToday);
 
   const chores = (data.chores || []).filter(
     chore => !chore.assignedTo || chore.assignedTo.length === 0 || chore.assignedTo.includes(personId)
@@ -2168,6 +2169,7 @@ function renderWeeklySchedule(containerId, data, personId) {
   getWeekDates(0).forEach(dateObj => {
     const dateKey = gardeDateKey(dateObj);
     const isToday = dateKey === todayKey;
+    if (isToday && skipToday) return; // déjà affiché juste au-dessus par la liste "aujourd'hui" de l'appelant.
     const isPastOrToday = dateKey <= todayKey;
     const scheduled = chores.filter(c => isChoreScheduledOnDate(c, dateObj));
 

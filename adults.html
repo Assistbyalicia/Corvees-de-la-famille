@@ -1640,12 +1640,14 @@ let repasWeekOffset = 0;
       const weekTitle = document.createElement("p");
       weekTitle.className = "small";
       weekTitle.style.margin = "0.75rem 0 0.25rem";
-      weekTitle.textContent = "📅 Cette semaine :";
+      weekTitle.textContent = "📅 Reste de la semaine :";
       container.appendChild(weekTitle);
       const weekContainer = document.createElement("div");
       container.appendChild(weekContainer);
       weekContainer.id = "child-detail-week-schedule";
-      renderWeeklySchedule("child-detail-week-schedule", data, child.id);
+      // skipToday : "aujourd'hui" est déjà la liste juste au-dessus, pas la peine
+      // de répéter les mêmes corvées une seconde fois ici.
+      renderWeeklySchedule("child-detail-week-schedule", data, child.id, { skipToday: true });
 
       const historyTitle = document.createElement("p");
       historyTitle.className = "small";
