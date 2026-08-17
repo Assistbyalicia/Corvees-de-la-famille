@@ -183,25 +183,40 @@ function setWalletBalance(personId, value) {
   saveData(data);
 }
 
+// Horodatage de la dernière action LOCALE (compléter/annuler une corvée,
+// acheter une récompense...) par personne, pour reconcileWallets ci-dessous.
+function markWalletActionNow(personId) {
+  if (!data.walletActionAt) data.walletActionAt = {};
+  data.walletActionAt[personId] = Date.now();
+  saveData(data);
+}
+
 function adjustWallet(personId, delta) {
   setWalletBalance(personId, getWalletBalance(personId) + delta);
+  markWalletActionNow(personId);
 }
 
 // Recale le solde local sur la vérité serveur (person.walletStars, calculée
-// par n8n depuis tout le Journal) SANS jamais faire redescendre l'affichage :
-// une action qui vient d'être envoyée par CET appareil est déjà reflétée
-// dans le solde local, mais peut ne pas encore l'être côté Notion/n8n au
-// moment où cette config fraîche est reçue (latence d'écriture). Prendre le
-// max() des deux évite ce recul temporaire tout en récupérant les gains
-// faits sur un AUTRE appareil (ou un ajustement manuel dans Notion) dès que
-// le serveur les reflète.
+// par n8n depuis tout le Journal). Ne préfère le solde local que dans une
+// courte fenêtre de grâce après une action LOCALE sur cette personne (le
+// temps que Notion/n8n rattrape la latence d'écriture) ; passé ce délai, la
+// vérité serveur l'emporte toujours. Sans cette limite dans le temps, un
+// solde local resté faux une seule fois (bug, données de test...) restait
+// bloqué indéfiniment au-dessus de Notion, sans jamais pouvoir se corriger —
+// ce qui est arrivé en pratique (Roxanne/Steven affichaient un solde que
+// Notion n'avait jamais eu).
+const WALLET_GRACE_MS = 2 * 60 * 1000;
+
 function reconcileWallets(freshData) {
   if (!freshData.wallet) freshData.wallet = {};
+  const now = Date.now();
   const allPeople = [...(freshData.children || []), ...(freshData.adults || [])];
   allPeople.forEach(person => {
     const local = freshData.wallet[person.id] || 0;
     const server = person.walletStars || 0;
-    freshData.wallet[person.id] = Math.max(local, server);
+    const lastAction = (freshData.walletActionAt && freshData.walletActionAt[person.id]) || 0;
+    const withinGrace = now - lastAction < WALLET_GRACE_MS;
+    freshData.wallet[person.id] = withinGrace ? Math.max(local, server) : server;
   });
 }
 
@@ -494,10 +509,12 @@ function getServerDayState(personId) {
     completedChores,
     repeatCounts,
     purchasedRewards: [],
-    // Le porte-monnaie (cumulatif, voir reconcileWallets) plutôt que le solde
-    // du seul jour : c'est ce que l'admin veut voir sur le tableau de bord
-    // d'un enfant, pas juste ce qu'il a gagné net aujourd'hui.
-    stars: person ? Math.max(getWalletBalance(personId), person.walletStars || 0) : getWalletBalance(personId)
+    // Vérité serveur directe (pas de max() avec le solde local) : cette vue
+    // est un monitoring en lecture seule d'une AUTRE personne, il n'y a
+    // jamais d'action locale récente à protéger ici — contrairement à
+    // getWalletBalance/reconcileWallets, utilisés quand on agit pour
+    // SOI-même sur cet appareil.
+    stars: person ? (person.walletStars || 0) : 0
   };
 }
 
@@ -716,6 +733,31 @@ async function postProposeReward(rewardId, label, personId) {
       });
 }
 
+// action: "propose_chore" — un enfant propose l'idée d'une nouvelle corvée
+// (sans valeur en étoiles, choisie par un adulte à l'approbation — voir
+// postApproveChoreProposal). Reste invisible des listes du jour (voir
+// isChoreVisibleToday/isChoreScheduledOnDate) tant qu'elle n'est pas
+// approuvée.
+async function postProposeChore(choreId, label, personId) {
+  return postToServer({
+        action: "propose_chore",
+        choreId,
+        label,
+        personId
+      });
+}
+
+// action: "approve_chore_proposal" — un adulte valide la corvée proposée en
+// lui donnant sa valeur en étoiles, ce qui l'active (elle n'est plus "en
+// attente").
+async function postApproveChoreProposal(choreId, stars) {
+  return postToServer({
+        action: "approve_chore_proposal",
+        choreId,
+        stars
+      });
+}
+
 // action: "update_reward_cost" — un adulte attribue un coût à une récompense
 // proposée par un enfant, ce qui l'active (elle n'est plus "en attente").
 async function postUpdateRewardCost(rewardId, cost) {
@@ -794,6 +836,61 @@ async function postUpdateAvatar(personId, avatar) {
 // Emoji d'une personne, avec un repli neutre si elle n'en a pas encore choisi.
 function getPersonAvatar(person) {
   return (person && person.avatar) || "🙂";
+}
+
+// Bloc admin "Ajuster les étoiles" (créditer/retirer un montant, ou
+// réinitialiser à 0) pour une personne donnée — utilisé côté détail enfant
+// et côté profil adulte (réservé à l'admin dans les deux cas). onDone est
+// rappelé après l'action pour que l'appelant relance son propre rendu.
+function buildStarAdjustmentBlock(person, onDone) {
+  const wrap = document.createElement("div");
+  wrap.className = "small";
+  wrap.style.margin = "0.5rem 0 0.75rem";
+  wrap.style.display = "flex";
+  wrap.style.flexWrap = "wrap";
+  wrap.style.alignItems = "center";
+  wrap.style.gap = "0.4rem";
+
+  const label = document.createElement("span");
+  label.textContent = `Solde Notion : ${person.walletStars || 0}⭐ —`;
+  wrap.appendChild(label);
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.placeholder = "±N";
+  input.style.width = "70px";
+  input.style.padding = "0.25rem";
+  wrap.appendChild(input);
+
+  const applyBtn = document.createElement("button");
+  applyBtn.className = "btn-secondary";
+  applyBtn.textContent = "Appliquer";
+  applyBtn.addEventListener("click", async () => {
+    const delta = parseInt(input.value, 10);
+    if (!delta) return;
+    adjustWallet(person.id, delta);
+    input.value = "";
+    await postAdjustPersonStars(person.id, delta);
+    if (onDone) onDone();
+  });
+  wrap.appendChild(applyBtn);
+
+  const resetBtn = document.createElement("button");
+  resetBtn.className = "btn-danger";
+  resetBtn.textContent = "Réinitialiser à 0";
+  resetBtn.addEventListener("click", async () => {
+    const current = person.walletStars || 0;
+    if (current === 0) return;
+    if (!confirm(`Remettre le solde de ${person.name} à 0 ?`)) return;
+    const delta = -current;
+    setWalletBalance(person.id, 0);
+    markWalletActionNow(person.id);
+    await postAdjustPersonStars(person.id, delta);
+    if (onDone) onDone();
+  });
+  wrap.appendChild(resetBtn);
+
+  return wrap;
 }
 
 /* ============================================================
@@ -994,6 +1091,21 @@ async function postUncheckShoppingItem(periodKey, ingredientId) {
 // stock" quand on coche un ingrédient sur la liste de courses.
 async function postUpdateIngredientStock(ingredientId, inStock) {
   return postToServer({ action: "update_ingredient_stock", ingredientId, inStock: Math.max(0, inStock) });
+}
+
+// action: "adjust_person_stars" — un admin crédite ou retire manuellement
+// des étoiles à quelqu'un (bonus exceptionnel, ou correction d'un solde qui
+// a dérivé). Crée une entrée Journal ("Ajustement manuel"), comme une prime
+// de série mais avec un montant libre — pas besoin de changement côté
+// lecture, le porte-monnaie (walletStars) est déjà calculé en sommant TOUT
+// le Journal.
+async function postAdjustPersonStars(personId, delta) {
+  return postToServer({
+        action: "adjust_person_stars",
+        personId,
+        delta,
+        date: getTodayKey()
+      });
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -1854,6 +1966,10 @@ const CHORE_WEEKDAYS = [
 // un ou plusieurs jours). Une corvée "ponctuelle" reste visible jusqu'à ce
 // qu'elle soit faite, puis elle est supprimée (voir kids.html/adults.html).
 function isChoreVisibleToday(chore) {
+  // Une corvée proposée par un enfant reste invisible des listes du jour
+  // tant qu'un adulte ne l'a pas validée (voir chore.pending) — sinon elle
+  // apparaîtrait comme une vraie corvée avant même d'avoir des étoiles.
+  if (chore.pending) return false;
   const frequency = chore.frequency || "quotidien";
   if (frequency !== "hebdomadaire") return true;
   if (!chore.weeklyDays || chore.weeklyDays.length === 0) return true;
@@ -2144,6 +2260,7 @@ function renderDailyHistoryList(containerId, data, personId) {
 // Même règle que isChoreVisibleToday, généralisée à n'importe quel jour, pour
 // la vue "Cette semaine" (qui doit afficher aussi les jours passés/à venir).
 function isChoreScheduledOnDate(chore, dateObj) {
+  if (chore.pending) return false;
   const frequency = chore.frequency || "quotidien";
   if (frequency !== "hebdomadaire") return true;
   if (!chore.weeklyDays || chore.weeklyDays.length === 0) return true;

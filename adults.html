@@ -1664,6 +1664,8 @@ let repasWeekOffset = 0;
       levelSummary.textContent = `🏅 ${child.level || "Apprenti(e)"} — ${child.lifetimeStars || 0}⭐ cumulées à vie.`;
       container.appendChild(levelSummary);
 
+      container.appendChild(buildStarAdjustmentBlock(child, renderChildrenDetailSections));
+
       const badgesRow = document.createElement("div");
       badgesRow.style.display = "flex";
       badgesRow.style.flexWrap = "wrap";
@@ -1804,6 +1806,10 @@ let repasWeekOffset = 0;
 
       const person = adults.find(p => p.id === data.activeAdultId) || adults[0];
       data.activeAdultId = person.id;
+
+      if (session.isAdmin) {
+        container.appendChild(buildStarAdjustmentBlock(person, renderAdultsSections));
+      }
 
       const state = getPersonDayState(person.id);
 
@@ -2094,7 +2100,7 @@ let repasWeekOffset = 0;
       list.innerHTML = "";
 
       const allPeople = [...(data.children || []), ...(data.adults || [])];
-      const chores = (data.chores || []).filter(chore => !filterFn || filterFn(chore));
+      const chores = (data.chores || []).filter(chore => !chore.pending && (!filterFn || filterFn(chore)));
 
       chores.forEach(chore => {
         const li = document.createElement("li");
@@ -2389,6 +2395,10 @@ let repasWeekOffset = 0;
         items.push({ type: "reward", value: r });
       });
 
+      (data.chores || []).filter(c => c.pending).forEach(c => {
+        items.push({ type: "choreProposal", value: c });
+      });
+
       (data.mealPlan || []).filter(m => m.pending).forEach(m => {
         items.push({ type: "meal", value: m });
       });
@@ -2527,6 +2537,52 @@ let repasWeekOffset = 0;
             saveData(data);
             refreshRenders();
             await postDeleteReward(reward.id);
+          });
+          actions.appendChild(input);
+          actions.appendChild(approveBtn);
+          actions.appendChild(rejectBtn);
+          li.appendChild(actions);
+
+        } else if (item.type === "choreProposal") {
+          const chore = item.value;
+          const proposer = allPeople.find(p => p.id === chore.proposedBy);
+          const left = document.createElement("span");
+          left.textContent = `⭐ ${chore.label}${proposer ? ` — proposée par ${proposer.name}` : ""}`;
+          li.appendChild(left);
+
+          const actions = buildActionsRow();
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "1";
+          input.max = "10";
+          input.placeholder = "Étoiles";
+          input.style.width = "90px";
+          input.style.padding = "0.25rem";
+          const approveBtn = document.createElement("button");
+          approveBtn.className = "btn-primary";
+          approveBtn.textContent = "Valider";
+          approveBtn.addEventListener("click", async () => {
+            const stars = parseInt(input.value, 10);
+            if (!stars || stars < 1) {
+              alert("Merci de choisir un nombre d'étoiles.");
+              return;
+            }
+            chore.stars = stars;
+            chore.pending = false;
+            delete chore.proposedBy;
+            saveData(data);
+            refreshRenders();
+            await postApproveChoreProposal(chore.id, stars);
+          });
+          const rejectBtn = document.createElement("button");
+          rejectBtn.className = "btn-danger";
+          rejectBtn.textContent = "Refuser";
+          rejectBtn.addEventListener("click", async () => {
+            if (!confirm(`Refuser la proposition « ${chore.label} » ?`)) return;
+            data.chores = (data.chores || []).filter(c => c !== chore);
+            saveData(data);
+            refreshRenders();
+            await postDeleteChore(chore.id);
           });
           actions.appendChild(input);
           actions.appendChild(approveBtn);

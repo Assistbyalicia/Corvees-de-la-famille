@@ -146,6 +146,13 @@
     <div class="section">
       <h2>Quêtes du jour</h2>
       <ul class="list" id="chores-list"></ul>
+
+      <h3 style="margin-top:1rem;">Proposer une corvée</h3>
+      <p class="small">Le nombre d'étoiles sera choisi par un adulte.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;">
+        <input id="propose-chore-label" type="text" placeholder="Nom de la corvée" style="flex:2; padding:0.25rem;" />
+        <button id="propose-chore-btn" class="btn-primary">Proposer</button>
+      </div>
     </div>
 
     <div class="section">
@@ -1139,6 +1146,36 @@
       });
     }
 
+    function setupProposeChoreForm() {
+      const input = document.getElementById("propose-chore-label");
+      const btn = document.getElementById("propose-chore-btn");
+      if (!input || !btn) return;
+
+      btn.addEventListener("click", async () => {
+        const label = input.value.trim();
+        if (!label || !data.activeChildId) return;
+
+        const newId = `${label.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
+
+        (data.chores || (data.chores = [])).push({
+          id: newId,
+          label,
+          stars: 0,
+          assignedTo: [data.activeChildId],
+          pending: true,
+          proposedBy: data.activeChildId,
+          _source: "local",
+          _localCreatedAt: Date.now()
+        });
+
+        saveData(data);
+        input.value = "";
+        renderAll();
+
+        await postProposeChore(newId, label, data.activeChildId);
+      });
+    }
+
     function setupProposeRewardForm() {
       const input = document.getElementById("propose-reward-label");
       const btn = document.getElementById("propose-reward-btn");
@@ -1233,6 +1270,7 @@
       setupPushReminderBadge(data.activeChildId);
       renderPushReminderBadge(data.activeChildId);
       setupProposeRewardForm();
+      setupProposeChoreForm();
       notifySyncStatus();
       retryPendingActions();
 
