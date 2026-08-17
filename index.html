@@ -80,12 +80,6 @@
     .small {
       margin-top: 1rem;
     }
-    .session-box {
-      display: none;
-    }
-    .session-box.active {
-      display: block;
-    }
     .row {
       display: flex;
       gap: 0.5rem;
@@ -111,14 +105,6 @@
     <h1>🗺️ Carnet de quêtes</h1>
 
     <div id="offline-badge" class="offline-banner"></div>
-
-    <div id="session-box" class="session-box">
-      <p id="session-text"></p>
-      <div class="row">
-        <button id="continue-btn" class="btn-primary">Continuer</button>
-        <button id="logout-btn" class="btn-secondary">Changer de personne</button>
-      </div>
-    </div>
 
     <div id="login-box">
       <p>Choisis qui tu es :</p>
@@ -243,37 +229,6 @@
       });
     }
 
-    function renderSessionBox() {
-      const session = getSession();
-      const sessionBox = document.getElementById("session-box");
-      const loginBox = document.getElementById("login-box");
-
-      if (!session) {
-        sessionBox.classList.remove("active");
-        loginBox.style.display = "block";
-        return;
-      }
-
-      const allPeople = [...(data.children || []), ...(data.adults || [])];
-      const person = allPeople.find(p => p.id === session.personId);
-      const name = person ? `${getPersonAvatar(person)} ${person.name}` : session.personId;
-
-      document.getElementById("session-text").textContent =
-        `Tu es déjà connecté(e) en tant que ${name}${session.isAdmin ? " (admin)" : ""}.`;
-
-      sessionBox.classList.add("active");
-      loginBox.style.display = "none";
-
-      document.getElementById("continue-btn").addEventListener("click", () => {
-        goToPersonPage(session.personId, session);
-      });
-      document.getElementById("logout-btn").addEventListener("click", () => {
-        clearSession();
-        sessionBox.classList.remove("active");
-        loginBox.style.display = "block";
-      });
-    }
-
     function renderForgotPersonSelect() {
       const select = document.getElementById("forgot-person");
       if (!select) return;
@@ -381,8 +336,17 @@
 
     async function initApp() {
       data = await loadAppData();
+
+      // Déjà connecté(e) : file directement vers sa page, sans repasser par
+      // l'écran de connexion (le bouton "Se déconnecter" de kids.html/adults.html
+      // reste le seul moyen de revenir ici volontairement).
+      const session = getSession();
+      if (session) {
+        goToPersonPage(session.personId, session);
+        return;
+      }
+
       renderOfflineBadge(data);
-      renderSessionBox();
       renderPeopleGrid();
       setupPinForm();
       renderForgotPersonSelect();
