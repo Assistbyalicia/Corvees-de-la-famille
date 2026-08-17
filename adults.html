@@ -453,6 +453,7 @@
         <button id="repas-subnav-planning" class="btn-secondary">📅 Planning</button>
         <button id="repas-subnav-shopping" class="btn-secondary">🛒 Courses</button>
         <button id="repas-subnav-recettes" class="btn-secondary">📖 Recettes</button>
+        <button id="repas-subnav-stocks" class="btn-secondary">📦 Stocks</button>
       </div>
 
       <div id="repas-panel-planning">
@@ -544,6 +545,15 @@
             <button id="recipe-plan-cancel" class="btn-secondary">Annuler</button>
           </div>
         </div>
+      </div>
+      </div>
+
+      <div id="repas-panel-stocks" style="display:none;">
+      <div class="section">
+        <h3>📦 Stocks</h3>
+        <p class="small">Ajuste la quantité en stock de n'importe quel ingrédient — sert à savoir quoi racheter (voir "Faisable maintenant" dans Recettes, et la liste de courses qui exclut ce qui est déjà en stock).</p>
+        <input id="stock-search" type="text" placeholder="Rechercher un ingrédient..." style="width:100%; padding:0.4rem; margin-bottom:0.75rem;" />
+        <ul class="list" id="stock-list"></ul>
       </div>
       </div>
     </div>
@@ -907,26 +917,33 @@ let repasWeekOffset = 0;
       const planningBtn = document.getElementById("repas-subnav-planning");
       const shoppingBtn = document.getElementById("repas-subnav-shopping");
       const recettesBtn = document.getElementById("repas-subnav-recettes");
+      const stocksBtn = document.getElementById("repas-subnav-stocks");
       const planningPanel = document.getElementById("repas-panel-planning");
       const shoppingPanel = document.getElementById("repas-panel-shopping");
       const recettesPanel = document.getElementById("repas-panel-recettes");
-      if (!planningBtn || !shoppingBtn || !recettesBtn || !planningPanel || !shoppingPanel || !recettesPanel) return;
+      const stocksPanel = document.getElementById("repas-panel-stocks");
+      if (!planningBtn || !shoppingBtn || !recettesBtn || !stocksBtn || !planningPanel || !shoppingPanel || !recettesPanel || !stocksPanel) return;
 
       function applySubview() {
         planningPanel.style.display = repasSubview === "planning" ? "" : "none";
         shoppingPanel.style.display = repasSubview === "shopping" ? "" : "none";
         recettesPanel.style.display = repasSubview === "recettes" ? "" : "none";
+        stocksPanel.style.display = repasSubview === "stocks" ? "" : "none";
         planningBtn.classList.toggle("btn-primary", repasSubview === "planning");
         planningBtn.classList.toggle("btn-secondary", repasSubview !== "planning");
         shoppingBtn.classList.toggle("btn-primary", repasSubview === "shopping");
         shoppingBtn.classList.toggle("btn-secondary", repasSubview !== "shopping");
         recettesBtn.classList.toggle("btn-primary", repasSubview === "recettes");
         recettesBtn.classList.toggle("btn-secondary", repasSubview !== "recettes");
+        stocksBtn.classList.toggle("btn-primary", repasSubview === "stocks");
+        stocksBtn.classList.toggle("btn-secondary", repasSubview !== "stocks");
+        if (repasSubview === "stocks") renderStockList();
       }
 
       planningBtn.addEventListener("click", () => { repasSubview = "planning"; applySubview(); });
       shoppingBtn.addEventListener("click", () => { repasSubview = "shopping"; applySubview(); });
       recettesBtn.addEventListener("click", () => { repasSubview = "recettes"; applySubview(); });
+      stocksBtn.addEventListener("click", () => { repasSubview = "stocks"; applySubview(); });
       applySubview();
 
       // Sans ce bouton, un 2e appareil ne voit les coches/menus posés par
@@ -1005,6 +1022,7 @@ let repasWeekOffset = 0;
       renderShoppingListSection();
       renderRecettesListSection();
       renderMealProposalsList();
+      renderStockList();
     }
 
     function renderRepasTabBadge() {
@@ -1081,6 +1099,85 @@ let repasWeekOffset = 0;
       }
     }
 
+    // Écran de gestion des stocks : les 327 ingrédients sont trop nombreux
+    // pour tous les afficher sans filtre, donc rien ne s'affiche tant qu'on
+    // n'a pas tapé au moins 2 caractères dans la recherche.
+    function renderStockList() {
+      const list = document.getElementById("stock-list");
+      const searchInput = document.getElementById("stock-search");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const needle = (searchInput ? searchInput.value : "").trim().toLowerCase();
+      if (needle.length < 2) {
+        const li = document.createElement("li");
+        li.textContent = "Tape au moins 2 lettres pour chercher un ingrédient.";
+        list.appendChild(li);
+        return;
+      }
+
+      const matches = (data.ingredients || [])
+        .filter(ing => ing.name.toLowerCase().includes(needle))
+        .slice(0, 30);
+
+      if (matches.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Aucun ingrédient trouvé.";
+        list.appendChild(li);
+        return;
+      }
+
+      matches.forEach(ing => {
+        const li = document.createElement("li");
+
+        const left = document.createElement("span");
+        left.textContent = ing.name;
+
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.alignItems = "center";
+        controls.style.gap = "0.5rem";
+
+        const minusBtn = document.createElement("button");
+        minusBtn.className = "btn-secondary";
+        minusBtn.textContent = "−";
+        minusBtn.disabled = (ing.inStock || 0) <= 0;
+
+        const valueSpan = document.createElement("span");
+        valueSpan.className = "badge";
+        valueSpan.textContent = `${ing.inStock || 0}`;
+
+        const plusBtn = document.createElement("button");
+        plusBtn.className = "btn-primary";
+        plusBtn.textContent = "+";
+
+        async function adjust(delta) {
+          ing.inStock = Math.max(0, (ing.inStock || 0) + delta);
+          valueSpan.textContent = `${ing.inStock}`;
+          minusBtn.disabled = ing.inStock <= 0;
+          saveData(data);
+          await postUpdateIngredientStock(ing.id, ing.inStock);
+        }
+
+        minusBtn.addEventListener("click", () => adjust(-1));
+        plusBtn.addEventListener("click", () => adjust(1));
+
+        controls.appendChild(minusBtn);
+        controls.appendChild(valueSpan);
+        controls.appendChild(plusBtn);
+
+        li.appendChild(left);
+        li.appendChild(controls);
+        list.appendChild(li);
+      });
+    }
+
+    function setupStockSearch() {
+      const input = document.getElementById("stock-search");
+      if (!input) return;
+      input.addEventListener("input", () => renderStockList());
+    }
+
     function renderShoppingListSection() {
       const list = document.getElementById("repas-shopping-list");
       if (!list) return;
@@ -1106,10 +1203,16 @@ let repasWeekOffset = 0;
             data.shoppingChecked = [...(data.shoppingChecked || []), { id: `local-${periodKey}-${item.id}`, periodKey, ingredientId: item.id }];
             saveData(data);
             await postCheckShoppingItem(periodKey, item.id);
+            // Cocher = "je viens de l'acheter" -> marqué en stock (l'item ne
+            // reste affiché "coché" que le temps de cette liste ; il
+            // disparaîtra de lui-même de la PROCHAINE liste de courses,
+            // computeShoppingList excluant déjà ce qui est en stock).
+            await postUpdateIngredientStock(item.id, 1);
           } else {
             data.shoppingChecked = (data.shoppingChecked || []).filter(c => !(c.periodKey === periodKey && c.ingredientId === item.id));
             saveData(data);
             await postUncheckShoppingItem(periodKey, item.id);
+            await postUpdateIngredientStock(item.id, 0);
           }
         });
 
@@ -3341,6 +3444,7 @@ let repasWeekOffset = 0;
       setupRepasNav();
       setupRecipePlanPicker();
       setupRepasSubnav();
+      setupStockSearch();
 
       setupChangePinForm(session, [...(data.children || []), ...(data.adults || [])]);
       setupSecurityQuestionForm(session, [...(data.children || []), ...(data.adults || [])]);

@@ -111,6 +111,7 @@ const defaultData = {
   mealPlan: [],
   shoppingChecked: [],
   recurringIngredients: [],
+  ingredients: [],
   pendingActions: [],
   photoValidations: [],
   todayCompletionsByPerson: {},
@@ -306,6 +307,7 @@ async function loadRepasData() {
     data.mealPlan = config.mealPlan || [];
     data.shoppingChecked = config.shoppingChecked || [];
     data.recurringIngredients = config.recurringIngredients || [];
+    data.ingredients = config.ingredients || [];
     saveData(data);
     return true;
   } catch (e) {
@@ -983,6 +985,15 @@ async function postCheckShoppingItem(periodKey, ingredientId) {
 
 async function postUncheckShoppingItem(periodKey, ingredientId) {
   return postToServer({ action: "uncheck_shopping_item", periodKey, ingredientId });
+}
+
+// action: "update_ingredient_stock" — ajuste la quantité "En stock" d'un
+// ingrédient (ingredientId est l'id de page Notion brut, déjà utilisé tel
+// quel côté client depuis computeShoppingList/data.ingredients). Sert à la
+// fois au petit éditeur de stock manuel et au marquage automatique "en
+// stock" quand on coche un ingrédient sur la liste de courses.
+async function postUpdateIngredientStock(ingredientId, inStock) {
+  return postToServer({ action: "update_ingredient_stock", ingredientId, inStock: Math.max(0, inStock) });
 }
 
 function urlBase64ToUint8Array(base64String) {
