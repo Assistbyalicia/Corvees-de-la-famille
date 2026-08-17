@@ -127,6 +127,8 @@
       <div id="badges-list" style="margin-top:0.6rem; display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
       <p class="small" style="margin:0.75rem 0 0.25rem;">Étoiles gagnées par jour :</p>
       <div id="stars-chart"></div>
+      <p class="small" style="margin:0.75rem 0 0.25rem;">Étoiles gagnées par mois :</p>
+      <div id="monthly-stats-chart"></div>
     </div>
 
     <div class="section" id="garde-today-section" style="display:none;">
@@ -468,6 +470,7 @@
       }
 
       renderStarsChart(document.getElementById("stars-chart"), data.choreHistory || [], child.id);
+      renderMonthlyStatsChart(document.getElementById("monthly-stats-chart"), data.monthlyRecap, child.id);
     }
 
     function renderGardeToday() {

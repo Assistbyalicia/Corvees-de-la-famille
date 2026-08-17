@@ -115,6 +115,7 @@ const defaultData = {
   photoValidations: [],
   todayCompletionsByPerson: {},
   dailyHistoryByPerson: {},
+  monthlyRecap: {},
   wallet: {},
   activeChildId: null,
   activeAdultId: null,
@@ -263,6 +264,7 @@ async function loadAppData() {
       personRoster: config.personRoster || [],
       todayCompletionsByPerson: config.todayCompletionsByPerson || {},
       dailyHistoryByPerson: config.dailyHistoryByPerson || {},
+      monthlyRecap: config.monthlyRecap || {},
       offline: false
     };
     // Porte-monnaie : on ne prend jamais telle quelle la valeur serveur
@@ -1783,6 +1785,41 @@ function renderStarsChart(container, choreHistory, personId) {
   container.innerHTML = svg;
 }
 
+// Vue "Statistiques" long terme : un graphique en barres des étoiles
+// gagnées par mois (contrairement à renderStarsChart, limité aux 30
+// dernières entrées Journal de toute la famille), à partir de
+// data.monthlyRecap[personId] (calculé côté n8n sur tout l'historique).
+function renderMonthlyStatsChart(container, monthlyRecap, personId) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const months = ((monthlyRecap && monthlyRecap[personId]) || []).slice().reverse(); // plus ancien -> plus récent
+  if (months.length === 0) {
+    container.innerHTML = '<p class="small">Pas encore assez d\'historique pour un graphique.</p>';
+    return;
+  }
+
+  const monthFmt = new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" });
+  const max = Math.max(...months.map(m => m.starsEarned), 1);
+  const width = 320, height = 120, chartBottom = 96, gap = 6;
+  const barWidth = Math.max(10, (width - gap * (months.length - 1)) / months.length);
+
+  let svg = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="width:100%; height:120px;">`;
+  months.forEach((m, i) => {
+    const barHeight = Math.max(2, (m.starsEarned / max) * (chartBottom - 10));
+    const x = i * (barWidth + gap);
+    const y = chartBottom - barHeight;
+    const label = monthFmt.format(new Date(`${m.month}-01T00:00:00`));
+
+    svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="3" fill="#6C5CE7"><title>${label} : ${m.starsEarned}⭐, ${m.choresCompleted} corvées, ${m.rewardsPurchased} achats</title></rect>`;
+    svg += `<text x="${x + barWidth / 2}" y="${y - 3}" font-size="9" text-anchor="middle" fill="#8A84A6">${m.starsEarned}</text>`;
+    svg += `<text x="${x + barWidth / 2}" y="${chartBottom + 12}" font-size="8" text-anchor="middle" fill="#8A84A6">${label}</text>`;
+  });
+  svg += `</svg>`;
+
+  container.innerHTML = svg;
+}
+
 const CHORE_FREQUENCIES = [
   { value: "quotidien", label: "Quotidien" },
   { value: "hebdomadaire", label: "Hebdomadaire" },
@@ -1872,6 +1909,46 @@ function computeStreak(days, personId) {
 // enfants côté kids.html, enfants+adultes côté adults.html) ; les colonnes
 // sont triées par total décroissant. highlightPersonId (optionnel) met en
 // valeur la colonne de cette personne.
+// "Roxanne a gagné 12⭐ cette semaine (5 corvées), en série de 4 jours." —
+// un résumé en langage courant plutôt qu'un tableau à décoder, pour que
+// l'admin voie l'essentiel d'un coup d'œil sans notification (juste une
+// vue passive, ouverte quand on veut). Calculé à partir des 7 entrées les
+// plus récentes de dailyHistoryByPerson (déjà triées, déjà en jours
+// calendaires Europe/Paris) plutôt que de weeklyRecap.days (clé UTC) — pour
+// ne jamais recouper deux systèmes de clé de jour différents.
+function renderWeekSummary(sectionId, listId, data, people) {
+  const section = document.getElementById(sectionId);
+  const list = document.getElementById(listId);
+  if (!section || !list) return;
+  list.innerHTML = "";
+
+  const summaries = (people || []).map(person => {
+    const history = ((data.dailyHistoryByPerson && data.dailyHistoryByPerson[person.id]) || []).slice(0, 7);
+    let starsThisWeek = 0;
+    let choresThisWeek = 0;
+    history.forEach(day => {
+      starsThisWeek += (day.starsEarned || 0) - (day.starsSpent || 0);
+      (day.choresDone || []).forEach(c => { choresThisWeek += c.count || 1; });
+    });
+    return { person, starsThisWeek, choresThisWeek, streak: person.currentStreak || 0 };
+  }).filter(s => s.starsThisWeek !== 0 || s.choresThisWeek !== 0);
+
+  section.style.display = summaries.length > 0 ? "" : "none";
+  if (summaries.length === 0) return;
+
+  summaries.sort((a, b) => b.starsThisWeek - a.starsThisWeek);
+
+  summaries.forEach(s => {
+    const li = document.createElement("li");
+    const choreWord = s.choresThisWeek > 1 ? "corvées" : "corvée";
+    let text = `${s.person.name} a gagné ${s.starsThisWeek}⭐ cette semaine (${s.choresThisWeek} ${choreWord})`;
+    if (s.streak >= 2) text += `, en série de ${s.streak} jours`;
+    text += ".";
+    li.textContent = text;
+    list.appendChild(li);
+  });
+}
+
 function renderWeeklyRecapTable(containerId, data, people, highlightPersonId) {
   const container = document.getElementById(containerId);
   if (!container) return;

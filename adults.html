@@ -120,6 +120,8 @@
       display: flex;
     }
 
+    body.restricted [data-subtab="inbox"],
+    body.restricted [data-subpanel="inbox"],
     body.restricted [data-subtab="enfants"],
     body.restricted [data-subpanel="enfants"],
     body.restricted [data-subtab="corvees-libres"],
@@ -133,6 +135,26 @@
     body.restricted [data-subtab="codes"],
     body.restricted [data-subpanel="codes"] {
       display: none;
+    }
+
+    #print-week-container {
+      display: none;
+    }
+    @media print {
+      body > *:not(#print-week-container) {
+        display: none !important;
+      }
+      #print-week-container {
+        display: block !important;
+      }
+      #print-week-container .print-person {
+        break-inside: avoid;
+        break-after: page;
+        margin-bottom: 1rem;
+      }
+      #print-week-container .print-person:last-child {
+        break-after: auto;
+      }
     }
   </style>
 </head>
@@ -187,14 +209,24 @@
     <div class="tab-content">
     <div class="tab-panel" id="tab-personnes">
       <div class="subnav" id="personnes-subnav">
+        <button data-subtab="inbox" class="btn-secondary" id="inbox-subtab-btn">🔔 À traiter</button>
         <button data-subtab="enfants" class="btn-secondary">Enfants</button>
         <button data-subtab="adultes" class="btn-secondary">Adultes</button>
         <button data-subtab="corvees-libres" class="btn-secondary">⭐ Corvées</button>
       </div>
 
+      <div data-subpanel="inbox">
+      <div class="section">
+        <h2>🔔 À traiter</h2>
+        <p class="small">Tout ce qui attend une décision : photos, échanges, propositions de récompenses et de repas.</p>
+        <ul class="list" id="inbox-list"></ul>
+      </div>
+      </div>
+
       <div data-subpanel="enfants">
       <div class="section">
         <h2>Enfants – tableau de bord</h2>
+        <button id="print-week-btn" class="btn-secondary">🖨️ Imprimer le planning de la semaine (tout le monde)</button>
         <table id="children-table">
           <thead>
             <tr>
@@ -364,6 +396,10 @@
       </div>
 
       <div data-subpanel="recap">
+      <div class="section" id="week-summary-section" style="display:none;">
+        <h2>📋 Résumé de la semaine</h2>
+        <ul class="list" id="week-summary-list"></ul>
+      </div>
       <div class="section">
         <h2>🏆 Classement de la semaine</h2>
         <p class="small">Total des étoiles gagnées ces 7 derniers jours (enfants et adultes).</p>
@@ -592,6 +628,8 @@
     </div>
     </div>
   </div>
+
+  <div id="print-week-container"></div>
 
   <script src="shared.js"></script>
   <script>
@@ -1554,6 +1592,16 @@ let repasWeekOffset = 0;
       container.appendChild(chartContainer);
       renderStarsChart(chartContainer, data.choreHistory || [], child.id);
 
+      const monthlyTitle = document.createElement("p");
+      monthlyTitle.className = "small";
+      monthlyTitle.style.margin = "0 0 0.25rem";
+      monthlyTitle.textContent = "Étoiles gagnées par mois :";
+      container.appendChild(monthlyTitle);
+      const monthlyChartContainer = document.createElement("div");
+      monthlyChartContainer.style.marginBottom = "0.75rem";
+      container.appendChild(monthlyChartContainer);
+      renderMonthlyStatsChart(monthlyChartContainer, data.monthlyRecap, child.id);
+
       const choresForChild = getChildChoresToday(
         data.chores,
         child.id,
@@ -2187,6 +2235,263 @@ let repasWeekOffset = 0;
 
     function renderUnassignedChoresList() {
       renderChoresList(chore => !chore.assignedTo || chore.assignedTo.length === 0, "unassigned-chores-list");
+    }
+
+    // Construit une page imprimable (une section par personne active, cassée
+    // en pages séparées via CSS @media print) avec le planning de la semaine
+    // de chacun, puis ouvre la boîte de dialogue d'impression du navigateur —
+    // aucun fichier généré/téléchargé, juste window.print() sur un contenu
+    // dédié (voir #print-week-container, masqué à l'écran, affiché seulement
+    // à l'impression).
+    // Regroupe tout ce qui attend une décision admin (photos, échanges,
+    // récompenses proposées, repas proposés) en une seule liste, pour ne
+    // plus avoir à ouvrir 4 onglets différents pour savoir s'il y a quelque
+    // chose à traiter. Réutilise les MÊMES actions post*/mutations que les
+    // listes dédiées (renderPhotoValidationsList, renderPendingSwapsList,
+    // renderProposedRewardsList, renderMealProposalsList), qui restent
+    // fonctionnelles par ailleurs — refreshRenders() garde les deux vues en
+    // phase après chaque action.
+    function renderInbox() {
+      const list = document.getElementById("inbox-list");
+      const tabBtn = document.getElementById("inbox-subtab-btn");
+      if (!list) return;
+      list.innerHTML = "";
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+      const slotLabelByValue = Object.fromEntries(MEAL_SLOTS.map(s => [s.value, s.label]));
+
+      const items = [];
+
+      (data.photoValidations || []).filter(v => v.status === "pending").forEach(v => {
+        items.push({ type: "photo", value: v });
+      });
+
+      const pendingSwapChores = (data.chores || []).filter(c => c.swap && c.swap.status === "pending");
+      const pairedIds = new Set();
+      pendingSwapChores.forEach(chore => {
+        if (pairedIds.has(chore.id)) return;
+        const counterpart = pendingSwapChores.find(
+          c => c.swap.fromPersonId === chore.swap.toPersonId && c.swap.toPersonId === chore.swap.fromPersonId
+        );
+        if (!counterpart || chore.id > counterpart.id) return;
+        pairedIds.add(chore.id);
+        pairedIds.add(counterpart.id);
+        items.push({ type: "swap", value: { mine: chore, theirs: counterpart } });
+      });
+
+      (data.rewards || []).filter(r => r.pending).forEach(r => {
+        items.push({ type: "reward", value: r });
+      });
+
+      (data.mealPlan || []).filter(m => m.pending).forEach(m => {
+        items.push({ type: "meal", value: m });
+      });
+
+      if (tabBtn) {
+        tabBtn.textContent = items.length > 0 ? `🔔 À traiter (${items.length})` : "🔔 À traiter";
+      }
+
+      if (items.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "Rien à traiter pour le moment 🎉";
+        list.appendChild(li);
+        return;
+      }
+
+      function buildActionsRow() {
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.alignItems = "center";
+        actions.style.gap = "0.5rem";
+        actions.style.marginTop = "0.5rem";
+        return actions;
+      }
+
+      items.forEach(item => {
+        const li = document.createElement("li");
+        li.style.flexDirection = "column";
+        li.style.alignItems = "stretch";
+
+        if (item.type === "photo") {
+          const v = item.value;
+          const left = document.createElement("span");
+          left.textContent = `📸 ${v.choreLabel || v.choreId} — ${v.childName || v.childId} (${v.date})`;
+          li.appendChild(left);
+
+          if (v.photo) {
+            const img = document.createElement("img");
+            img.src = v.photo;
+            img.alt = "Photo preuve";
+            img.className = "chore-photo-proof";
+            li.appendChild(img);
+          }
+
+          const actions = buildActionsRow();
+          const approveBtn = document.createElement("button");
+          approveBtn.className = "btn-primary";
+          approveBtn.textContent = "✅ Valider";
+          approveBtn.addEventListener("click", async () => {
+            v.status = "approved";
+            saveData(data);
+            refreshRenders();
+            await postReviewChorePhoto(v.childId, v.choreId, v.date, "approve");
+          });
+          const rejectBtn = document.createElement("button");
+          rejectBtn.className = "btn-secondary";
+          rejectBtn.textContent = "❌ Refuser";
+          rejectBtn.addEventListener("click", async () => {
+            v.status = "rejected";
+            saveData(data);
+            refreshRenders();
+            await postReviewChorePhoto(v.childId, v.choreId, v.date, "reject");
+          });
+          actions.appendChild(approveBtn);
+          actions.appendChild(rejectBtn);
+          li.appendChild(actions);
+
+        } else if (item.type === "swap") {
+          const { mine, theirs } = item.value;
+          const fromPerson = allPeople.find(p => p.id === mine.swap.fromPersonId);
+          const toPerson = allPeople.find(p => p.id === mine.swap.toPersonId);
+          const left = document.createElement("span");
+          left.textContent = `🔄 ${fromPerson ? fromPerson.name : mine.swap.fromPersonId} donne « ${mine.label} » ↔ ${toPerson ? toPerson.name : mine.swap.toPersonId} donne « ${theirs.label} »`;
+          li.appendChild(left);
+
+          const actions = buildActionsRow();
+          const approveBtn = document.createElement("button");
+          approveBtn.className = "btn-primary";
+          approveBtn.textContent = "Approuver";
+          approveBtn.addEventListener("click", async () => {
+            mine.swap.status = "approved";
+            theirs.swap.status = "approved";
+            await postApproveSwap(mine.id);
+            saveData(data);
+            refreshRenders();
+          });
+          const rejectBtn = document.createElement("button");
+          rejectBtn.className = "btn-secondary";
+          rejectBtn.textContent = "Refuser";
+          rejectBtn.addEventListener("click", async () => {
+            delete mine.swap;
+            delete theirs.swap;
+            await postRejectSwap(mine.id);
+            saveData(data);
+            refreshRenders();
+          });
+          actions.appendChild(approveBtn);
+          actions.appendChild(rejectBtn);
+          li.appendChild(actions);
+
+        } else if (item.type === "reward") {
+          const reward = item.value;
+          const proposer = allPeople.find(p => p.id === reward.proposedBy);
+          const left = document.createElement("span");
+          left.textContent = `🎁 ${reward.label}${proposer ? ` — proposée par ${proposer.name}` : ""}`;
+          li.appendChild(left);
+
+          const actions = buildActionsRow();
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "1";
+          input.max = "50";
+          input.placeholder = "Coût en ⭐";
+          input.style.width = "90px";
+          input.style.padding = "0.25rem";
+          const approveBtn = document.createElement("button");
+          approveBtn.className = "btn-primary";
+          approveBtn.textContent = "Valider";
+          approveBtn.addEventListener("click", async () => {
+            const cost = parseInt(input.value, 10);
+            if (!cost || cost < 1) {
+              alert("Merci de choisir un coût en étoiles.");
+              return;
+            }
+            reward.cost = cost;
+            reward.pending = false;
+            saveData(data);
+            refreshRenders();
+            await postUpdateRewardCost(reward.id, cost);
+          });
+          const rejectBtn = document.createElement("button");
+          rejectBtn.className = "btn-danger";
+          rejectBtn.textContent = "Refuser";
+          rejectBtn.addEventListener("click", async () => {
+            if (!confirm(`Refuser la proposition « ${reward.label} » ?`)) return;
+            data.rewards = (data.rewards || []).filter(r => r !== reward);
+            saveData(data);
+            refreshRenders();
+            await postDeleteReward(reward.id);
+          });
+          actions.appendChild(input);
+          actions.appendChild(approveBtn);
+          actions.appendChild(rejectBtn);
+          li.appendChild(actions);
+
+        } else if (item.type === "meal") {
+          const entry = item.value;
+          const recipe = findRecipeById(data.recipes || [], entry.recipeId);
+          const proposer = allPeople.find(p => p.id === entry.proposedBy);
+          const left = document.createElement("span");
+          left.textContent = `🍽️ ${dayFmt.format(new Date(`${entry.date}T00:00:00`))} ${slotLabelByValue[entry.slot] || entry.slot} — ${recipe ? recipe.name : "?"}${proposer ? ` (proposé par ${proposer.name})` : ""}`;
+          li.appendChild(left);
+
+          const actions = buildActionsRow();
+          const approveBtn = document.createElement("button");
+          approveBtn.className = "btn-primary";
+          approveBtn.textContent = "Valider";
+          approveBtn.addEventListener("click", async () => {
+            entry.pending = false;
+            saveData(data);
+            refreshRenders();
+            await postApproveMealProposal(entry.date, entry.slot);
+          });
+          const rejectBtn = document.createElement("button");
+          rejectBtn.className = "btn-danger";
+          rejectBtn.textContent = "Refuser";
+          rejectBtn.addEventListener("click", async () => {
+            if (!confirm(`Refuser la proposition « ${recipe ? recipe.name : ""} » ?`)) return;
+            data.mealPlan = (data.mealPlan || []).filter(m => m !== entry);
+            saveData(data);
+            refreshRenders();
+            await postRejectMealProposal(entry.date, entry.slot);
+          });
+          actions.appendChild(approveBtn);
+          actions.appendChild(rejectBtn);
+          li.appendChild(actions);
+        }
+
+        list.appendChild(li);
+      });
+    }
+
+    function setupPrintWeekButton() {
+      const btn = document.getElementById("print-week-btn");
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        const container = document.getElementById("print-week-container");
+        if (!container) return;
+        container.innerHTML = "";
+
+        const allPeople = [...(data.children || []), ...(data.adults || [])];
+        allPeople.forEach(person => {
+          const section = document.createElement("div");
+          section.className = "print-person";
+
+          const title = document.createElement("h2");
+          title.textContent = `${getPersonAvatar(person)} ${person.name}`;
+          section.appendChild(title);
+
+          const scheduleContainer = document.createElement("div");
+          scheduleContainer.id = `print-schedule-${person.id}`;
+          section.appendChild(scheduleContainer);
+
+          container.appendChild(section);
+          renderWeeklySchedule(`print-schedule-${person.id}`, data, person.id);
+        });
+
+        window.print();
+      });
     }
 
     function renderPendingSwapsList() {
@@ -2988,6 +3293,7 @@ let repasWeekOffset = 0;
         renderChoresList();
         renderUnassignedChoresList();
         renderPendingSwapsList();
+        renderInbox();
         renderChoreHistory();
         renderRewardsList();
         renderProposedRewardsList();
@@ -2995,6 +3301,7 @@ let repasWeekOffset = 0;
         renderRewardHistory();
         renderCodesList();
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])]);
+        renderWeekSummary("week-summary-section", "week-summary-list", data, [...(data.children || []), ...(data.adults || [])]);
       } else {
         renderWeeklyRecapTable("recap-table", data, [...(data.children || []), ...(data.adults || [])], session.personId);
       }
@@ -3023,6 +3330,7 @@ let repasWeekOffset = 0;
       setupSubTabs(document.getElementById("tab-reglages"), session.isAdmin ? "codes" : "compte");
 
       setupMobileTabsToggle();
+      setupPrintWeekButton();
       setupGardeNav();
       setupAddBlockForm();
       setupAddPersonForm();
