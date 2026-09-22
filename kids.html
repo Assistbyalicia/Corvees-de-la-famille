@@ -302,6 +302,20 @@
     </div>
   </div>
 
+  <div id="swap-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <h3 id="swap-modal-title">🔄 Échanger une corvée</h3>
+      <label class="small" for="swap-modal-person">Avec qui ?</label>
+      <select id="swap-modal-person"></select>
+      <label class="small" for="swap-modal-chore">Contre quelle tâche ?</label>
+      <select id="swap-modal-chore"></select>
+      <div class="modal-actions">
+        <button id="swap-modal-confirm" class="btn-primary">Proposer l'échange</button>
+        <button id="swap-modal-cancel" class="btn-secondary">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <script src="shared.js"></script>
   <script>
     let data = null;
@@ -720,6 +734,109 @@
       );
     }
 
+    // Corvées d'une personne aujourd'hui, éligibles à un échange contre
+    // `chore` (pas déjà en cours d'échange, pas elle-même, pas interdite au
+    // troc) — partagé entre le calcul de la liste "avec qui" et le
+    // remplissage du select "contre quelle tâche" dans la pop-up.
+    function choresSwappableFor(chore, personId) {
+      return (data.chores || []).filter(c =>
+        c.id !== chore.id && !c.notSwappable && !c.swap &&
+        getEffectiveAssignedTo(c).includes(personId)
+      );
+    }
+
+    function hasSwapPartnersFor(chore) {
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      return allPeople.some(p => p.id !== data.activeChildId && choresSwappableFor(chore, p.id).length > 0);
+    }
+
+    // Pop-up "🔄 Échanger" : à qui proposer, et contre laquelle de ses
+    // tâches — remplace l'ancienne rangée de deux <select> affichée en
+    // permanence sous chaque corvée échangeable.
+    let swapModalContext = null; // { chore, todayKey }
+
+    function openSwapModal(chore, todayKey) {
+      const overlay = document.getElementById("swap-modal-overlay");
+      const title = document.getElementById("swap-modal-title");
+      const personSelect = document.getElementById("swap-modal-person");
+      const choreSelect = document.getElementById("swap-modal-chore");
+      const confirmBtn = document.getElementById("swap-modal-confirm");
+      if (!overlay || !title || !personSelect || !choreSelect || !confirmBtn) return;
+
+      swapModalContext = { chore, todayKey };
+      title.textContent = `🔄 Échanger « ${chore.label} »`;
+
+      const allPeople = [...(data.children || []), ...(data.adults || [])];
+      const others = allPeople.filter(p => p.id !== data.activeChildId && choresSwappableFor(chore, p.id).length > 0);
+
+      personSelect.innerHTML = "";
+      others.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        personSelect.appendChild(opt);
+      });
+
+      function refreshChoreOptions() {
+        choreSelect.innerHTML = "";
+        const theirChores = choresSwappableFor(chore, personSelect.value);
+        theirChores.forEach(c => {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.label;
+          choreSelect.appendChild(opt);
+        });
+        confirmBtn.disabled = theirChores.length === 0;
+      }
+      personSelect.onchange = refreshChoreOptions;
+
+      if (others.length > 0) {
+        refreshChoreOptions();
+      } else {
+        choreSelect.innerHTML = "";
+        confirmBtn.disabled = true;
+      }
+
+      overlay.style.display = "flex";
+    }
+
+    function closeSwapModal() {
+      const overlay = document.getElementById("swap-modal-overlay");
+      if (overlay) overlay.style.display = "none";
+      swapModalContext = null;
+    }
+
+    function setupSwapModal() {
+      const overlay = document.getElementById("swap-modal-overlay");
+      const cancelBtn = document.getElementById("swap-modal-cancel");
+      const confirmBtn = document.getElementById("swap-modal-confirm");
+      const personSelect = document.getElementById("swap-modal-person");
+      const choreSelect = document.getElementById("swap-modal-chore");
+      if (!overlay || !cancelBtn || !confirmBtn || !personSelect || !choreSelect) return;
+
+      cancelBtn.addEventListener("click", closeSwapModal);
+      overlay.addEventListener("click", e => {
+        if (e.target === overlay) closeSwapModal();
+      });
+
+      confirmBtn.addEventListener("click", async () => {
+        if (!swapModalContext || confirmBtn.disabled) return;
+        const { chore, todayKey } = swapModalContext;
+        const theirChoreId = choreSelect.value;
+        const toPersonId = personSelect.value;
+        if (!theirChoreId || !toPersonId) return;
+
+        confirmBtn.disabled = true;
+        await postProposeSwap(chore.id, theirChoreId, data.activeChildId, toPersonId, todayKey);
+        const theirChore = (data.chores || []).find(c => c.id === theirChoreId);
+        chore.swap = { fromPersonId: data.activeChildId, toPersonId, status: "pending" };
+        if (theirChore) theirChore.swap = { fromPersonId: toPersonId, toPersonId: data.activeChildId, status: "pending" };
+        saveData(data);
+        closeSwapModal();
+        renderAll();
+      });
+    }
+
     function renderChores() {
       const list = document.getElementById("chores-list");
       list.innerHTML = "";
@@ -874,7 +991,8 @@
         // Échange (troc) de corvée : uniquement pour une corvée qui m'est
         // spécifiquement attribuée (pas les corvées communes, déjà ouvertes
         // à tous), échangeable (pas notSwappable), et sans échange déjà en
-        // cours dessus. Un vrai troc : ma corvée contre une des siennes.
+        // cours dessus. Un vrai troc : ma corvée contre une des siennes,
+        // choisi dans la pop-up (voir openSwapModal).
         if (chore.assignedTo && chore.assignedTo.includes(data.activeChildId) && !chore.notSwappable) {
           li.style.flexWrap = "wrap";
           if (chore.swap && chore.swap.status === "pending" && chore.swap.fromPersonId === data.activeChildId) {
@@ -888,69 +1006,15 @@
             swapBadge.textContent = `🔄 Proposé à ${toPerson ? toPerson.name : chore.swap.toPersonId} contre « ${theirChore ? theirChore.label : "?"} », en attente de validation par un adulte.`;
             li.appendChild(swapBadge);
           } else if (!chore.swap) {
-            const swapRow = document.createElement("div");
-            swapRow.style.width = "100%";
-            swapRow.style.display = "flex";
-            swapRow.style.gap = "0.4rem";
-            swapRow.style.marginTop = "0.3rem";
-
-            const personSelect = document.createElement("select");
-            personSelect.style.flex = "1";
-            const choreSelect = document.createElement("select");
-            choreSelect.style.flex = "1";
-
-            const allPeople = [...(data.children || []), ...(data.adults || [])];
-
-            function choresOwnedByToday(personId) {
-              return (data.chores || []).filter(c =>
-                c.id !== chore.id && !c.notSwappable && !c.swap &&
-                getEffectiveAssignedTo(c).includes(personId)
-              );
-            }
-
-            function refreshChoreOptions() {
-              choreSelect.innerHTML = "";
-              const theirChores = choresOwnedByToday(personSelect.value);
-              theirChores.forEach(c => {
-                const opt = document.createElement("option");
-                opt.value = c.id;
-                opt.textContent = c.label;
-                choreSelect.appendChild(opt);
-              });
-              swapBtn.disabled = theirChores.length === 0;
-            }
-
-            const others = allPeople.filter(p => p.id !== data.activeChildId && choresOwnedByToday(p.id).length > 0);
-            others.forEach(p => {
-              const opt = document.createElement("option");
-              opt.value = p.id;
-              opt.textContent = p.name;
-              personSelect.appendChild(opt);
-            });
-            personSelect.addEventListener("change", refreshChoreOptions);
-
             const swapBtn = document.createElement("button");
             swapBtn.type = "button";
             swapBtn.className = "btn-secondary";
+            swapBtn.style.width = "100%";
+            swapBtn.style.marginTop = "0.3rem";
             swapBtn.textContent = "🔄 Échanger";
-            swapBtn.disabled = others.length === 0;
-            swapBtn.addEventListener("click", async () => {
-              const theirChoreId = choreSelect.value;
-              const toPersonId = personSelect.value;
-              await postProposeSwap(chore.id, theirChoreId, data.activeChildId, toPersonId, todayKey);
-              const theirChore = (data.chores || []).find(c => c.id === theirChoreId);
-              chore.swap = { fromPersonId: data.activeChildId, toPersonId, status: "pending" };
-              if (theirChore) theirChore.swap = { fromPersonId: toPersonId, toPersonId: data.activeChildId, status: "pending" };
-              saveData(data);
-              renderAll();
-            });
-
-            if (others.length > 0) refreshChoreOptions();
-
-            swapRow.appendChild(personSelect);
-            swapRow.appendChild(choreSelect);
-            swapRow.appendChild(swapBtn);
-            li.appendChild(swapRow);
+            swapBtn.disabled = !hasSwapPartnersFor(chore);
+            swapBtn.addEventListener("click", () => openSwapModal(chore, todayKey));
+            li.appendChild(swapBtn);
           }
         }
 
@@ -1261,6 +1325,7 @@
       setupGardeNavKids();
       setupRepasNavKids();
       setupMealProposePicker();
+      setupSwapModal();
       setupRepasSubnavKids();
       setupTabs("quetes", tabName => { if (tabName === "repas") ensureRepasDataLoadedKids(); });
       setupSubTabs(document.getElementById("tab-quetes"), "quetes");
