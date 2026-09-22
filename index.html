@@ -322,10 +322,15 @@
           return;
         }
 
-        await postUpdatePin(personId, newPin);
+        const ok = await postUpdatePin(personId, newPin);
 
-        message.style.color = "#28a745";
-        message.textContent = "Code mis à jour ! Tu peux te connecter avec ton nouveau code.";
+        if (ok) {
+          message.style.color = "#28a745";
+          message.textContent = "Code mis à jour ! Tu peux te connecter avec ton nouveau code.";
+        } else {
+          message.style.color = "#e67700";
+          message.textContent = "Pas de réseau : le nouveau code sera actif dès que la connexion reviendra. Réessaie dans un instant avec ton ancien code si besoin.";
+        }
         message.style.display = "block";
         document.getElementById("forgot-security-answer").value = "";
         document.getElementById("forgot-recovery-code").value = "";

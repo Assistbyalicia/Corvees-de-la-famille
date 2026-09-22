@@ -690,59 +690,34 @@
     }
 
     function setupRepasNavKids() {
-      const prevBtn = document.getElementById("repas-prev-btn-kids");
-      const todayBtn = document.getElementById("repas-today-btn-kids");
-      const nextBtn = document.getElementById("repas-next-btn-kids");
-      const weekViewBtn = document.getElementById("repas-view-week-kids");
-      const monthViewBtn = document.getElementById("repas-view-month-kids");
-      if (!prevBtn || !todayBtn || !nextBtn || !weekViewBtn || !monthViewBtn) return;
+      setupMealPlanNav(
+        {
+          prev: "repas-prev-btn-kids",
+          today: "repas-today-btn-kids",
+          next: "repas-next-btn-kids",
+          viewWeek: "repas-view-week-kids",
+          viewMonth: "repas-view-month-kids"
+        },
+        {
+          getView: () => repasViewKids,
+          setView: v => { repasViewKids = v; },
+          getWeekOffset: () => repasWeekOffsetKids,
+          setWeekOffset: v => { repasWeekOffsetKids = v; },
+          getMonthOffset: () => repasMonthOffsetKids,
+          setMonthOffset: v => { repasMonthOffsetKids = v; }
+        },
+        renderRepasKids
+      );
 
-      prevBtn.addEventListener("click", () => {
-        if (repasViewKids === "week") repasWeekOffsetKids -= 1; else repasMonthOffsetKids -= 1;
-        renderRepasKids();
-      });
-      todayBtn.addEventListener("click", () => {
-        if (repasViewKids === "week") repasWeekOffsetKids = 0; else repasMonthOffsetKids = 0;
-        renderRepasKids();
-      });
-      nextBtn.addEventListener("click", () => {
-        if (repasViewKids === "week") repasWeekOffsetKids += 1; else repasMonthOffsetKids += 1;
-        renderRepasKids();
-      });
-
-      function updateViewButtons() {
-        weekViewBtn.classList.toggle("btn-primary", repasViewKids === "week");
-        weekViewBtn.classList.toggle("btn-secondary", repasViewKids !== "week");
-        monthViewBtn.classList.toggle("btn-primary", repasViewKids === "month");
-        monthViewBtn.classList.toggle("btn-secondary", repasViewKids !== "month");
-      }
-      weekViewBtn.addEventListener("click", () => { repasViewKids = "week"; updateViewButtons(); renderRepasKids(); });
-      monthViewBtn.addEventListener("click", () => { repasViewKids = "month"; updateViewButtons(); renderRepasKids(); });
-      updateViewButtons();
-
-      const search = document.getElementById("recettes-search-kids");
-      if (search) search.addEventListener("input", () => renderRecettesListKids());
-
-      const typeFilter = document.getElementById("recettes-type-filter-kids");
-      if (typeFilter) {
-        getUniqueMealTypes(data.recipes || []).forEach(type => {
-          const option = document.createElement("option");
-          option.value = type;
-          option.textContent = type;
-          typeFilter.appendChild(option);
-        });
-        typeFilter.addEventListener("change", () => renderRecettesListKids());
-      }
-
-      const onlyMakeable = document.getElementById("recettes-only-makeable-kids");
-      if (onlyMakeable) {
-        onlyMakeable.addEventListener("change", () => renderRecettesListKids());
-      }
-
-      const sortStale = document.getElementById("recettes-sort-stale-kids");
-      if (sortStale) {
-        sortStale.addEventListener("change", () => renderRecettesListKids());
-      }
+      setupRecettesFilters(
+        {
+          search: "recettes-search-kids",
+          typeFilter: "recettes-type-filter-kids",
+          onlyMakeable: "recettes-only-makeable-kids",
+          sortStale: "recettes-sort-stale-kids"
+        },
+        renderRecettesListKids
+      );
     }
 
     function renderChores() {
@@ -796,7 +771,7 @@
             const btn = document.createElement("button");
             btn.className = "btn-primary";
             btn.textContent = validation && validation.status === "rejected" ? "📸 Réessayer" : "📸 Envoyer une photo";
-            btn.addEventListener("click", () => triggerChorePhotoCapture(chore));
+            btn.addEventListener("click", () => triggerChorePhotoCapture(chore, btn));
             right.appendChild(btn);
           }
         } else if (chore.repeatable) {
@@ -807,6 +782,10 @@
           againBtn.className = "btn-primary";
           againBtn.textContent = count > 0 ? "🔁 Encore" : "Valider";
           againBtn.addEventListener("click", async () => {
+            if (againBtn.disabled) return;
+            againBtn.disabled = true;
+            cancelBtn.disabled = true;
+
             const state = getPersonDayState(data.activeChildId);
             state.repeatCounts[chore.id] = (state.repeatCounts[chore.id] || 0) + 1;
             if (!state.completedChores.includes(chore.id)) {
@@ -824,6 +803,10 @@
           cancelBtn.textContent = "Annuler";
           cancelBtn.disabled = count === 0;
           cancelBtn.addEventListener("click", async () => {
+            if (cancelBtn.disabled) return;
+            againBtn.disabled = true;
+            cancelBtn.disabled = true;
+
             const state = getPersonDayState(data.activeChildId);
             const current = state.repeatCounts[chore.id] || 0;
             if (current === 0) return;
@@ -849,6 +832,12 @@
           btn.textContent = completed ? "Annuler" : "Valider";
 
           btn.addEventListener("click", async () => {
+            // Empêche un double-tap d'envoyer complete+cancel (ou l'inverse)
+            // en concurrence pendant l'attente réseau, qui pourrait arriver
+            // dans le désordre côté serveur et désynchroniser le solde.
+            if (btn.disabled) return;
+            btn.disabled = true;
+
             const state = getPersonDayState(data.activeChildId);
             const index = state.completedChores.indexOf(chore.id);
             const isNowCompleted = index === -1;
@@ -978,7 +967,14 @@
     // Ouvre l'appareil photo, envoie la photo pour validation, puis affiche un
     // fantôme local "en attente" en attendant que la config confirme l'envoi
     // (même principe que les propositions de récompense : voir mergeById()).
-    function triggerChorePhotoCapture(chore) {
+    function triggerChorePhotoCapture(chore, btn) {
+      // Désactivé dès le tap : entre le clic et le "change" (choix de la
+      // photo, puis compressImageToBase64 qui peut prendre un instant sur
+      // une photo caméra), le bouton restait cliquable et un deuxième tap
+      // impatient pouvait déclencher une deuxième soumission pour la même
+      // corvée/jour avant que renderAll() ne le remplace.
+      if (btn) btn.disabled = true;
+
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "image/*";
@@ -993,7 +989,12 @@
       input.addEventListener("change", async () => {
         const file = input.files[0];
         input.remove();
-        if (!file) return;
+        if (!file) {
+          // Aucune photo choisie (annulé) : renderAll() ne sera pas
+          // déclenché, donc le bouton doit être réactivé explicitement.
+          if (btn) btn.disabled = false;
+          return;
+        }
 
         const personId = data.activeChildId;
         const photoBase64 = await compressImageToBase64(file, 1280, 0.7);

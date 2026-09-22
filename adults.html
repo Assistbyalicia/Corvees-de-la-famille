@@ -1432,61 +1432,34 @@ let repasWeekOffset = 0;
     }
 
     function setupRepasNav() {
-      const prevBtn = document.getElementById("repas-prev-btn");
-      const todayBtn = document.getElementById("repas-today-btn");
-      const nextBtn = document.getElementById("repas-next-btn");
-      const weekViewBtn = document.getElementById("repas-view-week");
-      const monthViewBtn = document.getElementById("repas-view-month");
-      if (!prevBtn || !todayBtn || !nextBtn || !weekViewBtn || !monthViewBtn) return;
+      setupMealPlanNav(
+        {
+          prev: "repas-prev-btn",
+          today: "repas-today-btn",
+          next: "repas-next-btn",
+          viewWeek: "repas-view-week",
+          viewMonth: "repas-view-month"
+        },
+        {
+          getView: () => repasView,
+          setView: v => { repasView = v; },
+          getWeekOffset: () => repasWeekOffset,
+          setWeekOffset: v => { repasWeekOffset = v; },
+          getMonthOffset: () => repasMonthOffset,
+          setMonthOffset: v => { repasMonthOffset = v; }
+        },
+        renderRepasTab
+      );
 
-      prevBtn.addEventListener("click", () => {
-        if (repasView === "week") repasWeekOffset -= 1; else repasMonthOffset -= 1;
-        renderRepasTab();
-      });
-      todayBtn.addEventListener("click", () => {
-        if (repasView === "week") repasWeekOffset = 0; else repasMonthOffset = 0;
-        renderRepasTab();
-      });
-      nextBtn.addEventListener("click", () => {
-        if (repasView === "week") repasWeekOffset += 1; else repasMonthOffset += 1;
-        renderRepasTab();
-      });
-
-      function updateViewButtons() {
-        weekViewBtn.classList.toggle("btn-primary", repasView === "week");
-        weekViewBtn.classList.toggle("btn-secondary", repasView !== "week");
-        monthViewBtn.classList.toggle("btn-primary", repasView === "month");
-        monthViewBtn.classList.toggle("btn-secondary", repasView !== "month");
-      }
-      weekViewBtn.addEventListener("click", () => { repasView = "week"; updateViewButtons(); renderRepasTab(); });
-      monthViewBtn.addEventListener("click", () => { repasView = "month"; updateViewButtons(); renderRepasTab(); });
-      updateViewButtons();
-
-      const search = document.getElementById("recettes-search");
-      if (search) {
-        search.addEventListener("input", () => renderRecettesListSection());
-      }
-
-      const typeFilter = document.getElementById("recettes-type-filter");
-      if (typeFilter) {
-        getUniqueMealTypes(data.recipes || []).forEach(type => {
-          const option = document.createElement("option");
-          option.value = type;
-          option.textContent = type;
-          typeFilter.appendChild(option);
-        });
-        typeFilter.addEventListener("change", () => renderRecettesListSection());
-      }
-
-      const onlyMakeable = document.getElementById("recettes-only-makeable");
-      if (onlyMakeable) {
-        onlyMakeable.addEventListener("change", () => renderRecettesListSection());
-      }
-
-      const sortStale = document.getElementById("recettes-sort-stale");
-      if (sortStale) {
-        sortStale.addEventListener("change", () => renderRecettesListSection());
-      }
+      setupRecettesFilters(
+        {
+          search: "recettes-search",
+          typeFilter: "recettes-type-filter",
+          onlyMakeable: "recettes-only-makeable",
+          sortStale: "recettes-sort-stale"
+        },
+        renderRecettesListSection
+      );
     }
 
     function renderRecettesListSection() {
@@ -1868,6 +1841,10 @@ let repasWeekOffset = 0;
           againBtn.className = "btn-primary";
           againBtn.textContent = count > 0 ? "🔁 Encore" : "Valider";
           againBtn.addEventListener("click", async () => {
+            if (againBtn.disabled) return;
+            againBtn.disabled = true;
+            cancelBtn.disabled = true;
+
             const personState = getPersonDayState(person.id);
             personState.repeatCounts[chore.id] = (personState.repeatCounts[chore.id] || 0) + 1;
             if (!personState.completedChores.includes(chore.id)) {
@@ -1884,6 +1861,10 @@ let repasWeekOffset = 0;
           cancelBtn.textContent = "Annuler";
           cancelBtn.disabled = count === 0;
           cancelBtn.addEventListener("click", async () => {
+            if (cancelBtn.disabled) return;
+            againBtn.disabled = true;
+            cancelBtn.disabled = true;
+
             const personState = getPersonDayState(person.id);
             const current = personState.repeatCounts[chore.id] || 0;
             if (current === 0) return;
@@ -1917,6 +1898,11 @@ let repasWeekOffset = 0;
               alert("📸 Cette corvée nécessite une photo pour être validée : envoie-la depuis l'appli enfant, elle apparaîtra ensuite ici dans « ⭐ Corvées → 📸 Photos » pour ta validation.");
               return;
             }
+
+            // Empêche un double-tap d'envoyer complete+cancel (ou l'inverse)
+            // en concurrence pendant l'attente réseau.
+            if (btn.disabled) return;
+            btn.disabled = true;
 
             if (isNowCompleted) {
               personState.completedChores.push(chore.id);
@@ -3196,8 +3182,13 @@ let repasWeekOffset = 0;
           person.pin = newPin;
           saveData(data);
           input.value = "";
+          btn.disabled = true;
+          const ok = await postUpdatePin(person.id, newPin);
+          btn.disabled = false;
+          if (!ok) {
+            alert(`Pas de réseau : le nouveau code de ${person.name} sera synchronisé dès que la connexion reviendra (l'ancien code reste actif entre-temps).`);
+          }
           renderCodesList();
-          await postUpdatePin(person.id, newPin);
         });
 
         right.appendChild(input);

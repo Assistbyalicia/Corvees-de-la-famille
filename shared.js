@@ -135,8 +135,18 @@ function loadData() {
   }
 }
 
+// try/catch nécessaire : localStorage.setItem lève une exception si le quota
+// est dépassé (ex. plusieurs photos-preuves accumulées dans pendingActions
+// pendant une coupure réseau prolongée). Sans ce filet, une seule écriture en
+// échec casserait tous les saveData() suivants (étoiles, corvées...) sans
+// aucun message visible pour l'utilisateur — voir aussi le plafond posé dans
+// enqueuePendingAction ci-dessous, qui vise à éviter d'en arriver là.
 function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error("Écriture localStorage impossible (quota dépassé ?) :", e);
+  }
 }
 
 function getTodayKey() {
@@ -257,6 +267,55 @@ function mergeById(configItems, localItems) {
   return [...list, ...localOnly];
 }
 
+// Un changement de code/question secrète/avatar met à jour person.pin/question/
+// answer/avatar localement tout de suite (optimiste), puis envoie l'action à
+// n8n — qui peut échouer/attendre (offline) et rester dans pendingActions.
+// mergeById() remplace pourtant l'objet personne entier par la version
+// serveur au prochain loadAppData(), donc sans ceci, ce changement pas encore
+// synchronisé disparaîtrait silencieusement (l'admin/l'enfant croit avoir
+// changé le code, mais l'ancien redevient actif). On réapplique donc ici les
+// champs concernés par-dessus la fusion, tant que l'action correspondante est
+// toujours en file d'attente.
+function reapplyPendingPersonFields(merged) {
+  const pending = merged.pendingActions || [];
+  if (pending.length === 0) return;
+  const allPeople = [...(merged.children || []), ...(merged.adults || [])];
+  pending.forEach(item => {
+    const body = item.body || {};
+    const person = allPeople.find(p => p.id === body.personId);
+    if (!person) return;
+    if (body.action === "update_pin") person.pin = body.newPin;
+    else if (body.action === "update_security_question") {
+      person.question = body.question;
+      person.answer = body.answer;
+    } else if (body.action === "update_avatar") person.avatar = body.avatar;
+  });
+}
+
+// Symétrique de reapplyPendingPersonFields ci-dessus, pour les suppressions :
+// supprimer une corvée/récompense (delete_chore, delete_reward — y compris la
+// suppression automatique d'une corvée "ponctuel" une fois faite) la retire
+// localement tout de suite, mais tant que l'action n'a pas réellement atteint
+// Notion, mergeById() la réinjecte depuis la config serveur au prochain
+// loadAppData(). Sans ceci, une corvée/récompense pourtant supprimée
+// réapparaît dans la liste après un simple rafraîchissement.
+function reapplyPendingRemovals(merged) {
+  const pending = merged.pendingActions || [];
+  if (pending.length === 0) return;
+  const deletedChoreIds = new Set(
+    pending.filter(item => item.body && item.body.action === "delete_chore").map(item => item.body.choreId)
+  );
+  const deletedRewardIds = new Set(
+    pending.filter(item => item.body && item.body.action === "delete_reward").map(item => item.body.rewardId)
+  );
+  if (deletedChoreIds.size > 0) {
+    merged.chores = (merged.chores || []).filter(c => !deletedChoreIds.has(c.id));
+  }
+  if (deletedRewardIds.size > 0) {
+    merged.rewards = (merged.rewards || []).filter(r => !deletedRewardIds.has(r.id));
+  }
+}
+
 // Fusionne la config N8N/Notion avec le localStorage local (personnes, corvées, récompenses).
 // Le state (corvées faites du jour) reste toujours celui du localStorage.
 async function loadAppData() {
@@ -290,6 +349,8 @@ async function loadAppData() {
     // Notion/n8n au moment de CE rafraîchissement) ferait redescendre le
     // solde affiché avant de remonter au rafraîchissement suivant.
     reconcileWallets(merged);
+    reapplyPendingPersonFields(merged);
+    reapplyPendingRemovals(merged);
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
     // créée depuis l'appli perd son marquage "local" dès qu'elle apparaît dans
     // Notion (elle est alors renvoyée telle quelle par la config, sans _source).
@@ -352,12 +413,25 @@ function notifySyncStatus() {
   syncStatusListeners.forEach(cb => cb(count));
 }
 
+// Les actions "photo" (photoBase64) pèsent à elles seules l'essentiel de la
+// taille de pendingActions : sans plafond, une série de coupures réseau
+// pendant plusieurs envois de photos-preuves peut faire dépasser le quota
+// localStorage et casser saveData() pour tout le reste (voir son try/catch
+// ci-dessus). Au-delà de MAX_PENDING_ACTIONS, on abandonne les plus
+// anciennes actions photo en attente plutôt que de laisser grossir la file
+// indéfiniment.
+const MAX_PENDING_ACTIONS = 30;
+
 function enqueuePendingAction(body) {
   if (!data.pendingActions) data.pendingActions = [];
   data.pendingActions.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     body
   });
+  while (data.pendingActions.length > MAX_PENDING_ACTIONS) {
+    const idx = data.pendingActions.findIndex(item => item.body && item.body.photoBase64);
+    data.pendingActions.splice(idx >= 0 ? idx : 0, 1);
+  }
   saveData(data);
   notifySyncStatus();
 }
@@ -1507,6 +1581,77 @@ function getUniqueMealTypes(recipes) {
   return Array.from(set).sort((a, b) => a.localeCompare(b, "fr"));
 }
 
+// Navigation semaine/mois du planning repas, partagée entre adults.html et
+// kids.html (auparavant dupliquée quasi ligne à ligne dans setupRepasNav et
+// setupRepasNavKids — un correctif de logique de navigation risquait de
+// n'être appliqué que d'un côté). ids porte les id DOM (suffixés "-kids" côté
+// enfants) ; state expose l'état partagé sous forme de getters/setters, pour
+// rester compatible avec les variables globales (repasView/repasViewKids...)
+// propres à chaque page ; render est la fonction de rendu complète à
+// rappeler après chaque changement (renderRepasTab / renderRepasKids).
+function setupMealPlanNav(ids, state, render) {
+  const prevBtn = document.getElementById(ids.prev);
+  const todayBtn = document.getElementById(ids.today);
+  const nextBtn = document.getElementById(ids.next);
+  const weekViewBtn = document.getElementById(ids.viewWeek);
+  const monthViewBtn = document.getElementById(ids.viewMonth);
+  if (!prevBtn || !todayBtn || !nextBtn || !weekViewBtn || !monthViewBtn) return;
+
+  prevBtn.addEventListener("click", () => {
+    if (state.getView() === "week") state.setWeekOffset(state.getWeekOffset() - 1);
+    else state.setMonthOffset(state.getMonthOffset() - 1);
+    render();
+  });
+  todayBtn.addEventListener("click", () => {
+    if (state.getView() === "week") state.setWeekOffset(0);
+    else state.setMonthOffset(0);
+    render();
+  });
+  nextBtn.addEventListener("click", () => {
+    if (state.getView() === "week") state.setWeekOffset(state.getWeekOffset() + 1);
+    else state.setMonthOffset(state.getMonthOffset() + 1);
+    render();
+  });
+
+  function updateViewButtons() {
+    const isWeek = state.getView() === "week";
+    weekViewBtn.classList.toggle("btn-primary", isWeek);
+    weekViewBtn.classList.toggle("btn-secondary", !isWeek);
+    monthViewBtn.classList.toggle("btn-primary", !isWeek);
+    monthViewBtn.classList.toggle("btn-secondary", isWeek);
+  }
+  weekViewBtn.addEventListener("click", () => { state.setView("week"); updateViewButtons(); render(); });
+  monthViewBtn.addEventListener("click", () => { state.setView("month"); updateViewButtons(); render(); });
+  updateViewButtons();
+}
+
+// Filtres de la liste de recettes (recherche/type/faisable/tri), eux aussi
+// partagés entre adults.html et kids.html pour la même raison que
+// setupMealPlanNav ci-dessus. ids porte les id DOM, renderList la fonction à
+// rappeler à chaque changement de filtre (elle relit elle-même les valeurs
+// courantes des champs).
+function setupRecettesFilters(ids, renderList) {
+  const search = document.getElementById(ids.search);
+  if (search) search.addEventListener("input", renderList);
+
+  const typeFilter = document.getElementById(ids.typeFilter);
+  if (typeFilter) {
+    getUniqueMealTypes(data.recipes || []).forEach(type => {
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = type;
+      typeFilter.appendChild(option);
+    });
+    typeFilter.addEventListener("change", renderList);
+  }
+
+  const onlyMakeable = document.getElementById(ids.onlyMakeable);
+  if (onlyMakeable) onlyMakeable.addEventListener("change", renderList);
+
+  const sortStale = document.getElementById(ids.sortStale);
+  if (sortStale) sortStale.addEventListener("change", renderList);
+}
+
 // Une recette est "faisable maintenant" si tous ses ingrédients sont en stock
 // (>0). Une recette sans ingrédients répertoriés n'est pas considérée comme
 // faisable (donnée manquante, pas une vraie recette "prête").
@@ -2443,10 +2588,15 @@ function setupChangePinForm(session, allPeople) {
       return;
     }
 
-    await postUpdatePin(session.personId, next);
+    const ok = await postUpdatePin(session.personId, next);
 
-    message.style.color = "#28a745";
-    message.textContent = "Code mis à jour !";
+    if (ok) {
+      message.style.color = "#28a745";
+      message.textContent = "Code mis à jour !";
+    } else {
+      message.style.color = "#e67700";
+      message.textContent = "Pas de réseau : le code sera mis à jour dès que la connexion reviendra. Utilise encore l'ancien code d'ici là.";
+    }
     message.style.display = "block";
     currentInput.value = "";
     newInput.value = "";
@@ -2483,10 +2633,15 @@ function setupSecurityQuestionForm(session, allPeople) {
       return;
     }
 
-    await postUpdateSecurityQuestion(session.personId, question, answer);
+    const ok = await postUpdateSecurityQuestion(session.personId, question, answer);
 
-    message.style.color = "#28a745";
-    message.textContent = "Question secrète enregistrée !";
+    if (ok) {
+      message.style.color = "#28a745";
+      message.textContent = "Question secrète enregistrée !";
+    } else {
+      message.style.color = "#e67700";
+      message.textContent = "Pas de réseau : ce sera enregistré dès que la connexion reviendra.";
+    }
     message.style.display = "block";
     answerInput.value = "";
   });
@@ -2515,10 +2670,15 @@ function setupAvatarForm(session, allPeople) {
       return;
     }
 
-    await postUpdateAvatar(session.personId, avatar);
+    const ok = await postUpdateAvatar(session.personId, avatar);
 
-    message.style.color = "#28a745";
-    message.textContent = "Avatar enregistré !";
+    if (ok) {
+      message.style.color = "#28a745";
+      message.textContent = "Avatar enregistré !";
+    } else {
+      message.style.color = "#e67700";
+      message.textContent = "Pas de réseau : ce sera enregistré dès que la connexion reviendra.";
+    }
     message.style.display = "block";
   });
 }
