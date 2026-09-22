@@ -866,7 +866,7 @@
         left.textContent = `${chore.label} (+${chore.stars}⭐)${formatChoreIcons(chore)}`;
 
         const right = document.createElement("div");
-        right.appendChild(buildChoreTimerWidget(chore.id, `chore-timer-${chore.id}`));
+        right.appendChild(buildChoreTimerWidget(data.activeChildId, chore.id, `chore-timer-${data.activeChildId}-${chore.id}`));
 
         const completed = childState.completedChores.includes(chore.id);
         const validation = chore.photoRequired

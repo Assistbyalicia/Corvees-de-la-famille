@@ -852,12 +852,16 @@
 
     // Un clic cycle : auto (calcul automatique) -> maman -> papa -> auto.
     async function cycleGardeOverride(dateKey, isForced, currentParent) {
+      let ok;
       if (!isForced) {
-        await postSetGardeOverride(dateKey, "maman");
+        ok = await postSetGardeOverride(dateKey, "maman");
       } else if (currentParent === "maman") {
-        await postSetGardeOverride(dateKey, "papa");
+        ok = await postSetGardeOverride(dateKey, "papa");
       } else {
-        await postClearGardeOverride(dateKey);
+        ok = await postClearGardeOverride(dateKey);
+      }
+      if (!ok) {
+        alert("Pas de réseau : ce changement de garde sera synchronisé dès que la connexion reviendra (déjà pris en compte ici en attendant).");
       }
       data = await loadAppData();
       renderGardeCalendar();
@@ -1203,16 +1207,18 @@ let repasWeekOffset = 0;
             data.shoppingChecked = [...(data.shoppingChecked || []), { id: `local-${periodKey}-${item.id}`, periodKey, ingredientId: item.id }];
             saveData(data);
             await postCheckShoppingItem(periodKey, item.id);
-            // Cocher = "je viens de l'acheter" -> marqué en stock (l'item ne
-            // reste affiché "coché" que le temps de cette liste ; il
-            // disparaîtra de lui-même de la PROCHAINE liste de courses,
-            // computeShoppingList excluant déjà ce qui est en stock).
-            await postUpdateIngredientStock(item.id, 1);
+            // Cocher = "je viens de l'acheter" -> marqué en stock, pour que
+            // computeShoppingList l'exclue tant qu'il n'a pas été reconsommé.
+            // Sauf pour un ingrédient récurrent (papier toilette, litière...) :
+            // il doit réapparaître à CHAQUE liste, donc son "coché" ne doit
+            // vivre que le temps de cette période (shoppingChecked ci-dessus),
+            // jamais dans inStock (voir computeShoppingList).
+            if (!item.recurring) await postUpdateIngredientStock(item.id, 1);
           } else {
             data.shoppingChecked = (data.shoppingChecked || []).filter(c => !(c.periodKey === periodKey && c.ingredientId === item.id));
             saveData(data);
             await postUncheckShoppingItem(periodKey, item.id);
-            await postUpdateIngredientStock(item.id, 0);
+            if (!item.recurring) await postUpdateIngredientStock(item.id, 0);
           }
         });
 
@@ -1515,6 +1521,16 @@ let repasWeekOffset = 0;
         left.style.flexWrap = "wrap";
         left.style.minWidth = "260px";
 
+        const overlapsAnother = blocks.some(other => other.id !== block.id && gardeBlocksOverlap(block, other));
+        if (overlapsAnother) {
+          const warning = document.createElement("span");
+          warning.className = "small";
+          warning.style.color = "var(--color-danger-text)";
+          warning.title = "Ce bloc chevauche un autre bloc : en cas de conflit, c'est le premier des deux dans cette liste qui l'emporte sur le calendrier.";
+          warning.textContent = "⚠️";
+          left.appendChild(warning);
+        }
+
         const labelInput = document.createElement("input");
         labelInput.type = "text";
         labelInput.value = block.label || "";
@@ -1608,7 +1624,10 @@ let repasWeekOffset = 0;
           return;
         }
 
-        await postAddGardeBlock(label, start, end, parent);
+        const ok = await postAddGardeBlock(label, start, end, parent);
+        if (!ok) {
+          alert(`Pas de réseau : le bloc "${label}" sera ajouté dès que la connexion reviendra.`);
+        }
         data = await loadAppData();
         renderGardeBlocksAdmin();
         renderGardeCalendar();
@@ -3265,7 +3284,10 @@ let repasWeekOffset = 0;
         const code = codeInput.value.trim();
         if (!name || !code) return;
 
-        await postAddPerson(name, type, code);
+        const ok = await postAddPerson(name, type, code);
+        if (!ok) {
+          alert(`Pas de réseau : ${name} sera ajouté(e) dès que la connexion reviendra.`);
+        }
         data = await loadAppData();
         renderManagePeopleAdmin();
         renderCodesList();

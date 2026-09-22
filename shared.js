@@ -316,6 +316,70 @@ function reapplyPendingRemovals(merged) {
   }
 }
 
+// Symétrique de reapplyPendingPersonFields, pour les échanges de corvées :
+// proposer/approuver/refuser un échange (propose_swap/approve_swap/
+// reject_swap) met à jour chore.swap localement tout de suite (voir
+// openSwapModal côté kids.html, et l'onglet "🔔 À traiter" côté adults.html),
+// mais tant que l'action n'a pas atteint Notion, mergeById() remplace la
+// corvée par la version serveur (qui ne connaît pas encore le changement) au
+// prochain loadAppData(). Sans ceci, une proposition d'échange faite
+// hors-ligne disparaît silencieusement au rechargement suivant (le bouton
+// "Échanger" réapparaît, ouvrant la porte à une double proposition).
+// Rejoue donc ici, dans l'ordre où elles ont été mises en attente, les
+// actions d'échange encore en file.
+function reapplyPendingSwaps(merged) {
+  const pending = merged.pendingActions || [];
+  if (pending.length === 0) return;
+  const chores = merged.chores || [];
+  const byId = id => chores.find(c => c.id === id);
+  const counterpartOf = chore => chore.swap && chores.find(
+    c => c.swap && c.swap.fromPersonId === chore.swap.toPersonId && c.swap.toPersonId === chore.swap.fromPersonId
+  );
+
+  pending.forEach(item => {
+    const body = item.body || {};
+    if (body.action === "propose_swap") {
+      const chore = byId(body.choreId);
+      const theirChore = byId(body.theirChoreId);
+      if (!chore || !theirChore) return;
+      chore.swap = { fromPersonId: body.fromPersonId, toPersonId: body.toPersonId, status: "pending" };
+      theirChore.swap = { fromPersonId: body.toPersonId, toPersonId: body.fromPersonId, status: "pending" };
+    } else if (body.action === "approve_swap") {
+      const chore = byId(body.choreId);
+      if (!chore || !chore.swap) return;
+      const counterpart = counterpartOf(chore);
+      chore.swap.status = "approved";
+      if (counterpart) counterpart.swap.status = "approved";
+    } else if (body.action === "reject_swap") {
+      const chore = byId(body.choreId);
+      if (!chore || !chore.swap) return;
+      const counterpart = counterpartOf(chore);
+      delete chore.swap;
+      if (counterpart) delete counterpart.swap;
+    }
+  });
+}
+
+// Symétrique de reapplyPendingRemovals, pour le planning de garde : forcer
+// ou effacer une exception (set_garde_override/clear_garde_override, voir
+// cycleGardeOverride côté adults.html) n'a aucun écho local optimiste —
+// l'admin ne voit le changement qu'après ce loadAppData(). Sans ceci, tant
+// que l'action est encore en attente (offline), la case cliquée revient
+// silencieusement à "auto" au lieu de refléter le changement demandé.
+function reapplyPendingGardeOverrides(merged) {
+  const pending = merged.pendingActions || [];
+  if (pending.length === 0) return;
+  if (!merged.gardeOverrides) merged.gardeOverrides = {};
+  pending.forEach(item => {
+    const body = item.body || {};
+    if (body.action === "set_garde_override") {
+      merged.gardeOverrides[body.date] = body.parent;
+    } else if (body.action === "clear_garde_override") {
+      delete merged.gardeOverrides[body.date];
+    }
+  });
+}
+
 // Fusionne la config N8N/Notion avec le localStorage local (personnes, corvées, récompenses).
 // Le state (corvées faites du jour) reste toujours celui du localStorage.
 async function loadAppData() {
@@ -351,6 +415,8 @@ async function loadAppData() {
     reconcileWallets(merged);
     reapplyPendingPersonFields(merged);
     reapplyPendingRemovals(merged);
+    reapplyPendingSwaps(merged);
+    reapplyPendingGardeOverrides(merged);
     // On réécrit le cache local avec le résultat fusionné : une corvée/récompense
     // créée depuis l'appli perd son marquage "local" dès qu'elle apparaît dans
     // Notion (elle est alors renvoyée telle quelle par la config, sans _source).
@@ -1010,6 +1076,14 @@ function gardeSameDay(a, b) {
 }
 function gardeOpposite(p) {
   return p === "papa" ? "maman" : "papa";
+}
+
+// Deux blocs de vacances se chevauchent si leurs intervalles [start, end] se
+// recoupent — utilisé côté admin (renderGardeBlocksAdmin) pour avertir d'un
+// chevauchement, que getSharedGardeLocation résout sinon en silence en
+// prenant le premier bloc trouvé dans la liste.
+function gardeBlocksOverlap(a, b) {
+  return gardeParseDate(a.start) <= gardeParseDate(b.end) && gardeParseDate(b.start) <= gardeParseDate(a.end);
 }
 
 function gardeFridayOfWeek(date) {
@@ -1874,9 +1948,14 @@ function computeShoppingList(recipes, mealPlan, dateKeys, recurringIngredients) 
   // "En stock" (même champ que isRecipeMakeable) : déjà à la maison, pas
   // besoin de le racheter. On n'a pas de quantité par recette (juste des
   // occurrences), donc "en stock > 0" veut dire "couvert", pas "combien
-  // il en reste à acheter".
+  // il en reste à acheter". Un ingrédient récurrent (papier toilette,
+  // litière...) échappe à ce filtre : par définition on le rachète à chaque
+  // liste, donc son statut "coché" est géré uniquement par période (voir
+  // shoppingChecked/periodKey côté adults.html) et ne doit jamais dépendre
+  // de inStock — sinon, une fois coché une fois, il ne réapparaîtrait plus
+  // jamais sur aucune liste future.
   return Object.values(byIngredient)
-    .filter(ing => !((ing.inStock || 0) > 0))
+    .filter(ing => ing.recurring || !((ing.inStock || 0) > 0))
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
@@ -1921,6 +2000,10 @@ function groupShoppingListByCategory(items) {
 // mémoire (pas dans data/localStorage) pour survivre à un re-rendu de la
 // liste — l'affichage se met à jour en cherchant l'élément par id à chaque
 // tick plutôt que de garder une référence DOM qu'un re-rendu invaliderait.
+// Clé composite personId+choreId (pas choreId seul) : une corvée commune
+// (non assignée) est visible par plusieurs enfants, et sans le personId un
+// enfant qui bascule sur le profil d'un autre verrait/arrêterait le chrono
+// que ce dernier a démarré sur la même corvée.
 const choreTimers = {};
 
 function formatElapsed(ms) {
@@ -1932,17 +2015,20 @@ function formatElapsed(ms) {
 
 // Construit le petit widget chrono (affichage + bouton start/stop) pour une
 // corvée donnée, à insérer dans sa ligne. displayId doit être unique par
-// corvée (ex. `chore-timer-${chore.id}`) et stable d'un rendu à l'autre.
-function buildChoreTimerWidget(choreId, displayId) {
+// personne+corvée (ex. `chore-timer-${personId}-${chore.id}`) et stable
+// d'un rendu à l'autre.
+function buildChoreTimerWidget(personId, choreId, displayId) {
   const wrap = document.createElement("span");
   wrap.style.display = "inline-flex";
   wrap.style.alignItems = "center";
   wrap.style.gap = "0.3rem";
 
+  const timerKey = `${personId}-${choreId}`;
+
   const display = document.createElement("span");
   display.id = displayId;
   display.className = "small";
-  const running = choreTimers[choreId];
+  const running = choreTimers[timerKey];
   display.textContent = running ? formatElapsed(Date.now() - running.startTime) : "";
 
   const btn = document.createElement("button");
@@ -1951,17 +2037,17 @@ function buildChoreTimerWidget(choreId, displayId) {
   btn.textContent = running ? "⏹" : "⏱️";
 
   btn.addEventListener("click", () => {
-    if (choreTimers[choreId]) {
-      clearInterval(choreTimers[choreId].intervalId);
-      const elapsed = Date.now() - choreTimers[choreId].startTime;
-      delete choreTimers[choreId];
+    if (choreTimers[timerKey]) {
+      clearInterval(choreTimers[timerKey].intervalId);
+      const elapsed = Date.now() - choreTimers[timerKey].startTime;
+      delete choreTimers[timerKey];
       btn.textContent = "⏱️";
       const el = document.getElementById(displayId);
       if (el) el.textContent = "";
       if (elapsed >= 2000) alert(`⏱️ Terminé en ${formatElapsed(elapsed)} !`);
     } else {
       const startTime = Date.now();
-      choreTimers[choreId] = {
+      choreTimers[timerKey] = {
         startTime,
         intervalId: setInterval(() => {
           const el = document.getElementById(displayId);
@@ -2149,30 +2235,6 @@ function formatWeeklyRecapDay(dateStr) {
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${WEEKLY_RECAP_WEEKDAYS[d.getDay()]} ${dd}/${mm}`;
-}
-
-// Nombre de jours d'affilée (dans la fenêtre des 7 derniers jours fournie par
-// weeklyRecap) où personId a gagné au moins une étoile. Si le jour le plus
-// récent (aujourd'hui) est encore à 0, on part de la veille pour ne pas
-// casser la série avant même que la journée soit terminée.
-function computeStreak(days, personId) {
-  if (!days || days.length === 0) return 0;
-
-  let endIndex = days.length - 1;
-  if (!((days[endIndex].points && days[endIndex].points[personId]) > 0)) {
-    endIndex -= 1;
-  }
-
-  let streak = 0;
-  for (let i = endIndex; i >= 0; i--) {
-    const points = (days[i].points && days[i].points[personId]) || 0;
-    if (points > 0) {
-      streak += 1;
-    } else {
-      break;
-    }
-  }
-  return streak;
 }
 
 // Affiche un vrai tableau jour x personne pour les 7 derniers jours
